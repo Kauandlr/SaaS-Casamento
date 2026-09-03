@@ -18,7 +18,12 @@
 
 # misc
 .DS_Store
+Thumbs.db
 *.pem
+*.zip
+*.tar.gz
+.idea/
+.vscode/
 
 # debug
 npm-debug.log*
@@ -28,6 +33,7 @@ yarn-error.log*
 
 # local environment
 .env*
+!.env.example
 
 # deployment and generated files
 .vercel
