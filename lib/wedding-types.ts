@@ -49,6 +49,78 @@ export type ChecklistItem = {
   status: string;
 };
 
+export type HouseholdPlan = {
+  id: string;
+  budgetCents: number;
+  allocatedSavingsCents: number;
+  includeInGeneral: boolean;
+  targetDate: string;
+  housingType: string;
+};
+
+export type HouseholdCategory = {
+  id: string;
+  name: string;
+  position: number;
+};
+
+export type HouseholdItem = {
+  id: string;
+  categoryId: string | null;
+  name: string;
+  desiredQuantity: number;
+  acquiredQuantity: number;
+  priority: string;
+  status: string;
+  estimatedUnitCents: number;
+  minPriceCents: number;
+  maxPriceCents: number;
+  actualPaidCents: number;
+  brand: string;
+  model: string;
+  store: string;
+  productUrl: string;
+  responsible: string;
+  owner: string;
+  notes: string;
+  giftIntent: string;
+  purchaseTiming: string;
+  desiredDate: string | null;
+  purchasedAt: string | null;
+  warrantyMonths: number;
+  warrantyEndsAt: string | null;
+  imageUrl: string;
+  favorite: boolean;
+};
+
+export type HouseholdGift = {
+  id: string;
+  itemId: string;
+  quantity: number;
+  giver: string;
+  giftedAt: string;
+  approximateValueCents: number;
+  notes: string;
+};
+
+export type HouseholdChecklistItem = {
+  id: string;
+  title: string;
+  responsible: string;
+  dueDate: string;
+  status: string;
+};
+
+export type HouseholdPayment = {
+  id: string;
+  itemId: string;
+  itemName: string;
+  installmentNumber: number;
+  amountCents: number;
+  dueDate: string;
+  status: string;
+};
+
 export type WeddingSnapshot = {
   wedding: {
     id: string;
@@ -68,4 +140,12 @@ export type WeddingSnapshot = {
   vendors: Vendor[];
   guests: Guest[];
   checklist: ChecklistItem[];
+  household: {
+    plan: HouseholdPlan;
+    categories: HouseholdCategory[];
+    items: HouseholdItem[];
+    gifts: HouseholdGift[];
+    checklist: HouseholdChecklistItem[];
+    payments: HouseholdPayment[];
+  };
 };
