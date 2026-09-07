@@ -16,7 +16,7 @@ Wedding Planning OS privado para organizar o casamento com clareza financeira e 
 
 ```bash
 npm install
-docker compose up -d
+docker compose up -d --build
 npm run db:generate
 npm run db:migrate
 npm run dev

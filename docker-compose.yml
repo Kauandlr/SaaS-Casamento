@@ -1,0 +1,51 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:-postgres://vinculo:vinculo@postgres:5432/vinculo}
+      AUTH_USER_ID: ${AUTH_USER_ID:-}
+      AUTH_EMAIL: ${AUTH_EMAIL:-}
+      AUTH_DISPLAY_NAME: ${AUTH_DISPLAY_NAME:-}
+      AUTH_PASSWORD_HASH: ${AUTH_PASSWORD_HASH:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - >-
+          fetch('http://127.0.0.1:3000/login').then((response) =>
+          process.exit(response.status < 500 ? 0 : 1)).catch(() =>
+          process.exit(1))
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: vinculo
+      POSTGRES_USER: vinculo
+      POSTGRES_PASSWORD: vinculo
+    ports:
+      - "${POSTGRES_PORT:-5437}:5432"
+    volumes:
+      - vinculo-postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vinculo -d vinculo"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  vinculo-postgres-data:
