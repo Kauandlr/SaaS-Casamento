@@ -29,4 +29,12 @@ export async function verifyPassword(password: string, encoded: string): Promise
   } catch { return false; }
 }
 
+export async function verifyPlainPassword(password: string, expected: string): Promise<boolean> {
+  const [actualDigest, expectedDigest] = await Promise.all([
+    crypto.subtle.digest('SHA-256', new TextEncoder().encode(password)),
+    crypto.subtle.digest('SHA-256', new TextEncoder().encode(expected)),
+  ]);
+  return equalBytes(new Uint8Array(actualDigest), new Uint8Array(expectedDigest));
+}
+
 export { base64url };
