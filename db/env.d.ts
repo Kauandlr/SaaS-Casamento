@@ -6,5 +6,6 @@ declare namespace Cloudflare {
     AUTH_EMAIL?: string;
     AUTH_DISPLAY_NAME?: string;
     AUTH_PASSWORD_HASH?: string;
+    AUTH_PASSWORD?: string;
   }
 }
