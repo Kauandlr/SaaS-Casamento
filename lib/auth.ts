@@ -2,7 +2,7 @@ import { cookies, headers } from 'next/headers';
 import { env } from 'cloudflare:workers';
 import { db } from './wedding-data';
 import { id, now } from './wedding-data';
-import { base64url, verifyPassword, verifyPlainPassword } from './password';
+import { base64url, verifyPlainPassword } from './password';
 
 const SESSION_COOKIE = 'vinculo_session';
 const SESSION_DAYS = 7;
@@ -15,8 +15,7 @@ type AuthConfig = {
   userId: string;
   email: string;
   displayName: string;
-  passwordHash?: string;
-  password?: string;
+  password: string;
 };
 
 type Row = Record<string, unknown>;
@@ -26,12 +25,11 @@ function config(): AuthConfig {
   const userId = values.AUTH_USER_ID?.trim();
   const email = values.AUTH_EMAIL?.trim().toLowerCase();
   const displayName = values.AUTH_DISPLAY_NAME?.trim();
-  const passwordHash = values.AUTH_PASSWORD_HASH?.trim();
   const password = values.AUTH_PASSWORD;
-  if (!userId || !email || !displayName || (!passwordHash && !password)) {
-    throw new Error('AUTH_USER_ID, AUTH_EMAIL, AUTH_DISPLAY_NAME e AUTH_PASSWORD ou AUTH_PASSWORD_HASH são obrigatórios.');
+  if (!userId || !email || !displayName || !password) {
+    throw new Error('AUTH_USER_ID, AUTH_EMAIL, AUTH_DISPLAY_NAME e AUTH_PASSWORD são obrigatórios.');
   }
-  return { userId, email, displayName, passwordHash, password };
+  return { userId, email, displayName, password };
 }
 
 async function sha256(value: string): Promise<string> {
@@ -70,9 +68,7 @@ export async function login(email: string, password: string, request: Request): 
   const cutoff = new Date(Date.now() - ATTEMPT_WINDOW_MS).toISOString();
   const attempts = await db().prepare('SELECT COUNT(*)::int AS count FROM auth_login_attempts WHERE fingerprint = ? AND attempted_at > ?').bind(fingerprint, cutoff).first<Row>();
   if (Number(attempts?.count ?? 0) >= MAX_ATTEMPTS) return { ok: false, status: 429 };
-  const valid = normalizedEmail === account.email && (account.passwordHash
-    ? await verifyPassword(password, account.passwordHash)
-    : await verifyPlainPassword(password, account.password!));
+  const valid = normalizedEmail === account.email && await verifyPlainPassword(password, account.password);
   if (!valid) {
     await db().prepare('INSERT INTO auth_login_attempts (id, fingerprint, attempted_at) VALUES (?, ?, ?)').bind(id(), fingerprint, now()).run();
     return { ok: false, status: 401 };

@@ -9,7 +9,6 @@ services:
       AUTH_USER_ID: ${AUTH_USER_ID:-}
       AUTH_EMAIL: ${AUTH_EMAIL:-}
       AUTH_DISPLAY_NAME: ${AUTH_DISPLAY_NAME:-}
-      AUTH_PASSWORD_HASH: ${AUTH_PASSWORD_HASH:-}
       AUTH_PASSWORD: ${AUTH_PASSWORD:-}
     depends_on:
       postgres:
