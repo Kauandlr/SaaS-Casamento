@@ -45,7 +45,18 @@ function clientAddress(request: Request): string {
 export function isSameOrigin(request: Request): boolean {
   const origin = request.headers.get('origin');
   if (!origin) return true;
-  try { return new URL(origin).origin === new URL(request.url).origin; } catch { return false; }
+  try {
+    const requestOrigin = new URL(request.url).origin;
+    const productionOrigin = 'https://vinculo-wedding-os.kauandelara.chatgpt.site';
+    const receivedOrigin = new URL(origin).origin;
+
+    // Sites can execute the Worker behind an internal origin while the browser
+    // sends the public deployment origin. Keep the local check and explicitly
+    // allow the canonical production origin.
+    return receivedOrigin === requestOrigin || receivedOrigin === productionOrigin;
+  } catch {
+    return false;
+  }
 }
 
 export async function login(email: string, password: string, request: Request): Promise<{ ok: true; user: AuthUser; token: string } | { ok: false; status: 401 | 429 }> {
