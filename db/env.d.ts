@@ -6,5 +6,7 @@ declare namespace Cloudflare {
     AUTH_EMAIL?: string;
     AUTH_DISPLAY_NAME?: string;
     AUTH_PASSWORD?: string;
+    OPENAI_API_KEY?: string;
+    OPENAI_MODEL?: string;
   }
 }

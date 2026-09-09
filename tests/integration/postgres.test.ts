@@ -9,6 +9,7 @@ const client = new Client({ connectionString });
 before(async () => {
   await client.connect();
   await client.query(`TRUNCATE TABLE
+    ai_action_proposals, ai_messages, ai_conversations,
     auth_login_attempts, auth_sessions, household_files, household_payments,
     household_purchases, household_gifts, household_item_options, household_items,
     household_checklist_items, household_categories, household_plans, activity_log,
@@ -20,7 +21,7 @@ after(async () => { await client.end(); });
 
 void test('migration creates the complete schema without domain seeds', async () => {
   const tables = await client.query<{ tablename: string }>(`SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename NOT LIKE '__drizzle%'`);
-  assert.equal(tables.rowCount, 20);
+  assert.equal(tables.rowCount, 23);
   const counts = await client.query<{ count: string }>('SELECT (SELECT count(*) FROM weddings) + (SELECT count(*) FROM payments) + (SELECT count(*) FROM vendors) + (SELECT count(*) FROM guests) + (SELECT count(*) FROM household_items) AS count');
   assert.equal(counts.rows[0].count, '0');
 });

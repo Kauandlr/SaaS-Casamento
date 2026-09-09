@@ -540,7 +540,7 @@ export function HouseholdView({
           </div>
           <NativeSelect
             value={category}
-            onChange={(event) => setCategory(event.target.value)}
+            onValueChange={(value) => setCategory(value ?? 'todas')}
           >
             <NativeSelectOption value="todas">
               Todas as categorias
@@ -553,7 +553,7 @@ export function HouseholdView({
           </NativeSelect>
           <NativeSelect
             value={status}
-            onChange={(event) => setStatus(event.target.value)}
+            onValueChange={(value) => setStatus(value ?? 'todos')}
           >
             <NativeSelectOption value="todos">
               Todos os status
@@ -574,7 +574,7 @@ export function HouseholdView({
           </NativeSelect>
           <NativeSelect
             value={timing}
-            onChange={(event) => setTiming(event.target.value)}
+            onValueChange={(value) => setTiming(value ?? 'todos')}
           >
             <NativeSelectOption value="todos">
               Qualquer período

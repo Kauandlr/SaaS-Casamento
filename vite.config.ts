@@ -22,6 +22,8 @@ const localBindingConfig = {
       AUTH_EMAIL: process.env.AUTH_EMAIL,
       AUTH_DISPLAY_NAME: process.env.AUTH_DISPLAY_NAME,
       AUTH_PASSWORD_HASH: process.env.AUTH_PASSWORD_HASH,
+      OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+      OPENAI_MODEL: process.env.OPENAI_MODEL ?? 'gpt-5.6-luna',
     }).filter((entry): entry is [string, string] => Boolean(entry[1])),
   ),
   d1_databases: d1

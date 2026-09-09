@@ -20,6 +20,7 @@ import {
   Plus,
   Receipt,
   SpinnerGap,
+  Sparkle,
   Star,
   Storefront,
   Sun,
@@ -67,6 +68,7 @@ import {
   type HouseholdAction,
 } from '@/components/household-view';
 import type { WeddingSnapshot } from '@/lib/wedding-types';
+import { LunaPanel } from '@/components/luna-panel';
 
 type View =
   | 'overview'
@@ -169,6 +171,7 @@ export function WeddingApp({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [dark, setDark] = useState(false);
+  const [lunaOpen, setLunaOpen] = useState(false);
 
   useEffect(() => {
     dataRef.current = data;
@@ -469,6 +472,10 @@ export function WeddingApp({
               <Button variant="ghost" size="icon" aria-label="Notificações">
                 <Bell size={19} />
               </Button>
+              <Button variant="outline" size="sm" onClick={() => setLunaOpen(true)} className="gap-1.5 border-primary/30 text-primary">
+                <Sparkle size={16} weight="fill" />
+                <span className="hidden sm:inline">Luna 5.6</span>
+              </Button>
               <Button variant="outline" size="sm" onClick={logout}>
                 Sair
               </Button>
@@ -552,6 +559,7 @@ export function WeddingApp({
           </nav>
         </section>
       </main>
+      <LunaPanel open={lunaOpen} onClose={() => setLunaOpen(false)} onSnapshot={setData} />
       {view !== 'household' && (
         <AddDialog
           view={view}
@@ -1184,7 +1192,7 @@ function Guests({
                       className="ml-auto w-[154px]"
                       size="sm"
                       value={item.rsvp}
-                      onChange={(event) => onRsvp(item.id, event.target.value)}
+                      onValueChange={(value) => onRsvp(item.id, value ?? item.rsvp)}
                     >
                       <NativeSelectOption value="ainda não convidado">
                         Não convidado

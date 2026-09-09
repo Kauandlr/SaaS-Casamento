@@ -1,64 +1,162 @@
 import * as React from 'react';
 
 import { cn } from '@/lib/utils';
-import { ChevronDownIcon } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
-type NativeSelectProps = Omit<React.ComponentProps<'select'>, 'size'> & {
+type NativeSelectProps = Omit<
+  React.ComponentPropsWithoutRef<typeof SelectTrigger>,
+  'children' | 'size'
+> & {
+  children?: React.ReactNode;
+  name?: string;
+  value?: string | null;
+  defaultValue?: string | null;
+  required?: boolean;
+  disabled?: boolean;
+  form?: string;
   size?: 'sm' | 'default';
+  onChange?: React.ChangeEventHandler<HTMLSelectElement>;
+  onValueChange?: (value: string | null) => void;
 };
+
+type NativeSelectOptionProps = Omit<
+  React.ComponentPropsWithoutRef<typeof SelectItem>,
+  'children' | 'className' | 'label' | 'value'
+> & {
+  children?: React.ReactNode;
+  className?: string;
+  label?: string;
+  value?: string;
+};
+
+function optionText(children: React.ReactNode): string {
+  return React.Children.toArray(children)
+    .map((child) => (typeof child === 'string' || typeof child === 'number' ? String(child) : ''))
+    .join('')
+    .trim();
+}
+
+function optionValue(value: string | undefined, children: React.ReactNode): string | null {
+  if (value === '') return null;
+  if (value !== undefined && value !== null) return String(value);
+  return optionText(children);
+}
+
+function selectValue(value: string | null | undefined): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === '') return null;
+  return value;
+}
 
 function NativeSelect({
   className,
   size = 'default',
+  children,
+  value,
+  defaultValue,
+  onChange,
+  onValueChange,
+  name,
+  required,
+  disabled,
+  id,
+  form,
   ...props
 }: NativeSelectProps) {
+  const options = React.Children.toArray(children).filter(
+    (child): child is React.ReactElement<NativeSelectOptionProps> =>
+      React.isValidElement(child) && child.type === NativeSelectOption,
+  );
+  const items = options.map((child) => ({
+    value: optionValue(child.props.value, child.props.children),
+    label: child.props.children,
+  }));
+  const firstValue = items[0]?.value;
+  const controlledValue = selectValue(value);
+  const initialValue = defaultValue === undefined ? firstValue : selectValue(defaultValue);
+
+  function handleValueChange(nextValue: string | null) {
+    onValueChange?.(nextValue);
+    if (onChange) {
+      const event = {
+        target: { value: nextValue ?? '' },
+        currentTarget: { value: nextValue ?? '' },
+      } as React.ChangeEvent<HTMLSelectElement>;
+      onChange(event);
+    }
+  }
+
   return (
-    <div
-      className={cn(
-        'group/native-select relative w-fit has-[select:disabled]:opacity-50',
-        className,
-      )}
-      data-slot="native-select-wrapper"
+    <Select
+      items={items}
+      name={name}
+      value={controlledValue}
+      defaultValue={initialValue}
+      onValueChange={handleValueChange}
+      required={required}
+      disabled={disabled}
+      form={form}
       data-size={size}
     >
-      <select
-        data-slot="native-select"
+      <div
+        className={cn(
+          'group/native-select relative w-fit data-disabled:pointer-events-none data-disabled:opacity-50',
+          className,
+        )}
+        data-disabled={disabled || undefined}
         data-size={size}
-        className="border-input placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 dark:hover:bg-input/50 focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:aria-invalid:border-destructive/50 h-8 w-full min-w-0 appearance-none rounded-lg border bg-transparent py-1 pr-8 pl-2.5 text-sm transition-colors select-none focus-visible:ring-3 aria-invalid:ring-3 data-[size=sm]:h-7 data-[size=sm]:rounded-[min(var(--radius-md),10px)] data-[size=sm]:py-0.5 outline-none disabled:pointer-events-none disabled:cursor-not-allowed"
-        {...props}
-      />
-      <ChevronDownIcon
-        className="text-muted-foreground top-1/2 right-2.5 size-4 -translate-y-1/2 pointer-events-none absolute select-none"
-        aria-hidden="true"
-        data-slot="native-select-icon"
-      />
-    </div>
+      >
+        <SelectTrigger id={id} size={size} {...props}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent align="start" alignItemWithTrigger={false}>
+          {children}
+        </SelectContent>
+      </div>
+    </Select>
   );
 }
 
 function NativeSelectOption({
   className,
+  value,
+  children,
   ...props
-}: React.ComponentProps<'option'>) {
+}: NativeSelectOptionProps) {
   return (
-    <option
-      data-slot="native-select-option"
-      className={cn('bg-[Canvas] text-[CanvasText]', className)}
+    <SelectItem
+      value={optionValue(value, children)}
+      className={cn('text-popover-foreground', className)}
       {...props}
-    />
+    >
+      {children}
+    </SelectItem>
   );
 }
 
 function NativeSelectOptGroup({
   className,
+  label,
+  children,
   ...props
-}: React.ComponentProps<'optgroup'>) {
+}: {
+  className?: string;
+  label?: string;
+  children?: React.ReactNode;
+} & Omit<React.ComponentPropsWithoutRef<typeof SelectGroup>, 'children' | 'className'>) {
   return (
-    <optgroup
-      data-slot="native-select-optgroup"
-      className={cn('bg-[Canvas] text-[CanvasText]', className)}
-      {...props}
-    />
+    <SelectGroup className={className} {...props}>
+      {label ? <SelectLabel>{label}</SelectLabel> : null}
+      {children}
+    </SelectGroup>
   );
 }
 

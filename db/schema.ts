@@ -255,6 +255,58 @@ export const activityLog = pgTable(
   (table) => [index('idx_activity_wedding_created').on(table.weddingId, table.createdAt)],
 );
 
+export const aiConversations = pgTable(
+  'ai_conversations',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    weddingId: uuid('wedding_id')
+      .notNull()
+      .references(() => weddings.id, { onDelete: 'cascade' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [uniqueIndex('idx_ai_conversations_wedding').on(table.weddingId)],
+);
+
+export const aiMessages = pgTable(
+  'ai_messages',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    conversationId: uuid('conversation_id')
+      .notNull()
+      .references(() => aiConversations.id, { onDelete: 'cascade' }),
+    role: text('role').notNull(),
+    content: text('content').notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [index('idx_ai_messages_conversation_created').on(table.conversationId, table.createdAt)],
+);
+
+export const aiActionProposals = pgTable(
+  'ai_action_proposals',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    conversationId: uuid('conversation_id')
+      .notNull()
+      .references(() => aiConversations.id, { onDelete: 'cascade' }),
+    weddingId: uuid('wedding_id')
+      .notNull()
+      .references(() => weddings.id, { onDelete: 'cascade' }),
+    action: text('action').notNull(),
+    title: text('title').notNull(),
+    summary: text('summary').notNull(),
+    payloadJson: text('payload_json').notNull(),
+    status: text('status').notNull().default('pendente'),
+    createdAt: createdAt(),
+    expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'string' }).notNull(),
+    confirmedAt: timestamp('confirmed_at', { withTimezone: true, mode: 'string' }),
+  },
+  (table) => [
+    index('idx_ai_proposals_wedding_status').on(table.weddingId, table.status),
+    index('idx_ai_proposals_conversation').on(table.conversationId),
+  ],
+);
+
 export const householdPlans = pgTable(
   'household_plans',
   {
