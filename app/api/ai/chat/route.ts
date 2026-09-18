@@ -23,14 +23,28 @@ type Row = Record<string, unknown>;
 async function getConversation(weddingId: string, requestedId?: string): Promise<string> {
   const existing = requestedId
     ? await db().prepare('SELECT id FROM ai_conversations WHERE id = ? AND wedding_id = ?').bind(requestedId, weddingId).first<Row>()
-    : await db().prepare('SELECT id FROM ai_conversations WHERE wedding_id = ?').bind(weddingId).first<Row>();
+    : await db().prepare('SELECT id FROM ai_conversations WHERE wedding_id = ? ORDER BY updated_at DESC LIMIT 1').bind(weddingId).first<Row>();
   if (existing?.id) return String(existing.id);
   const conversationId = id();
   const timestamp = now();
   await db().prepare(`INSERT INTO ai_conversations (id, wedding_id, created_at, updated_at)
-    VALUES (?, ?, ?, ?) ON CONFLICT (wedding_id) DO NOTHING`).bind(conversationId, weddingId, timestamp, timestamp).run();
-  const created = await db().prepare('SELECT id FROM ai_conversations WHERE wedding_id = ?').bind(weddingId).first<Row>();
-  return String(created?.id ?? conversationId);
+    VALUES (?, ?, ?, ?)`).bind(conversationId, weddingId, timestamp, timestamp).run();
+  return conversationId;
+}
+
+async function listConversations(weddingId: string) {
+  const result = await db().prepare(`SELECT c.id, c.created_at, c.updated_at,
+    COALESCE((SELECT m.content FROM ai_messages m
+      WHERE m.conversation_id = c.id AND m.role = 'user'
+      ORDER BY m.created_at ASC LIMIT 1), 'Novo chat') AS title
+    FROM ai_conversations c WHERE c.wedding_id = ?
+    ORDER BY c.updated_at DESC LIMIT 50`).bind(weddingId).all<Row>();
+  return result.results.map((row) => ({
+    id: String(row.id),
+    title: String(row.title).slice(0, 80),
+    createdAt: String(row.created_at),
+    updatedAt: String(row.updated_at),
+  }));
 }
 
 async function history(conversationId: string) {
@@ -42,12 +56,14 @@ async function history(conversationId: string) {
   }));
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: 'Sessão necessária.' }, { status: 401 });
   try {
     const weddingId = await requireWeddingId(user.userId);
-    const conversationId = await getConversation(weddingId);
+    const requestedId = new URL(request.url).searchParams.get('conversationId') ?? undefined;
+    const conversationId = await getConversation(weddingId, requestedId);
+    const conversations = await listConversations(weddingId);
     const messages = await db().prepare(`SELECT id, role, content, created_at FROM ai_messages
       WHERE conversation_id = ? ORDER BY created_at ASC LIMIT 50`).bind(conversationId).all<Row>();
     const proposals = await db().prepare(`SELECT id, action, title, summary, payload_json, status
@@ -55,6 +71,7 @@ export async function GET() {
       ORDER BY created_at ASC`).bind(conversationId).all<Row>();
     return NextResponse.json({
       conversationId,
+      conversations,
       messages: messages.results.map((row) => ({ id: String(row.id), role: String(row.role), content: String(row.content) })),
       pendingProposals: proposals.results.map((row) => ({
         id: String(row.id), action: String(row.action), title: String(row.title), summary: String(row.summary),
@@ -118,7 +135,12 @@ export async function POST(request: Request) {
         .bind(proposal.id, conversationId, weddingId, proposal.action, proposal.title, proposal.summary,
           JSON.stringify(proposal.payload), 'pendente', now(), new Date(Date.now() + 30 * 60 * 1000).toISOString()).run();
     }
-    return NextResponse.json({ conversationId, message: { id: assistantId, role: 'assistant', content: assistantContent }, proposals });
+    return NextResponse.json({
+      conversationId,
+      conversations: await listConversations(weddingId),
+      message: { id: assistantId, role: 'assistant', content: assistantContent },
+      proposals,
+    });
   } catch (error) {
     if (error instanceof z.ZodError) return NextResponse.json({ error: 'Envie uma mensagem válida.' }, { status: 422 });
     console.error('Luna chat failed', error instanceof Error ? error.message : 'unknown_error');

@@ -265,7 +265,7 @@ export const aiConversations = pgTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (table) => [uniqueIndex('idx_ai_conversations_wedding').on(table.weddingId)],
+  (table) => [index('idx_ai_conversations_wedding').on(table.weddingId)],
 );
 
 export const aiMessages = pgTable(

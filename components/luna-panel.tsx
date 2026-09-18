@@ -4,8 +4,10 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Check,
   CheckCircle,
+  ClockCounterClockwise,
   PaperPlaneTilt,
   PencilSimple,
+  Plus,
   Sparkle,
   SpinnerGap,
   Trash,
@@ -23,6 +25,13 @@ type Message = {
   proposals?: LunaProposal[];
 };
 
+type Conversation = {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export function LunaPanel({
   open,
   onClose,
@@ -33,10 +42,12 @@ export function LunaPanel({
   onSnapshot: (snapshot: WeddingSnapshot) => void;
 }) {
   const [conversationId, setConversationId] = useState<string>();
+  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(false);
   const [processing, setProcessing] = useState<string>();
+  const [showHistory, setShowHistory] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -44,10 +55,11 @@ export function LunaPanel({
     if (!open) return;
     let active = true;
     void fetch('/api/ai/chat')
-      .then(async (response) => (response.ok ? response.json() as Promise<{ conversationId: string; messages: Message[]; pendingProposals: LunaProposal[] }> : null))
-      .then((result: { conversationId: string; messages: Message[]; pendingProposals: LunaProposal[] } | null) => {
+      .then(async (response) => (response.ok ? response.json() as Promise<{ conversationId: string; conversations?: Conversation[]; messages: Message[]; pendingProposals: LunaProposal[] }> : null))
+      .then((result: { conversationId: string; conversations?: Conversation[]; messages: Message[]; pendingProposals: LunaProposal[] } | null) => {
         if (!active || !result) return;
         setConversationId(result.conversationId);
+        setConversations(result.conversations ?? []);
         const restored = (result.messages ?? []) as Message[];
         const pending = (result.pendingProposals ?? []) as LunaProposal[];
         setMessages(pending.length
@@ -62,6 +74,27 @@ export function LunaPanel({
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
 
+  async function restoreConversation(requestedId: string) {
+    const response = await fetch(`/api/ai/chat?conversationId=${encodeURIComponent(requestedId)}`);
+    if (!response.ok) return;
+    const result = await response.json() as { conversationId: string; conversations?: Conversation[]; messages: Message[]; pendingProposals: LunaProposal[] };
+    setConversationId(result.conversationId);
+    setConversations(result.conversations ?? []);
+    const restored = result.messages ?? [];
+    const pending = result.pendingProposals ?? [];
+    setMessages(pending.length
+      ? [...restored, { id: `pending-${Date.now()}`, role: 'assistant', content: 'Propostas pendentes:', proposals: pending }]
+      : restored);
+    setShowHistory(false);
+  }
+
+  function startNewConversation() {
+    setConversationId(undefined);
+    setMessages([]);
+    setDraft('');
+    setShowHistory(false);
+  }
+
   async function send() {
     const message = draft.trim();
     if (!message || loading) return;
@@ -74,9 +107,10 @@ export function LunaPanel({
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ message, conversationId }),
       });
-      const result = (await response.json()) as { conversationId?: string; message?: Message; proposals?: LunaProposal[]; error?: string };
+      const result = (await response.json()) as { conversationId?: string; conversations?: Conversation[]; message?: Message; proposals?: LunaProposal[]; error?: string };
       if (!response.ok || !result.message) throw new Error(result.error ?? 'A Luna não respondeu.');
       setConversationId(result.conversationId);
+      setConversations(result.conversations ?? []);
       setMessages((current) => [...current, { ...result.message!, proposals: result.proposals }]);
     } catch (error) {
       setMessages((current) => [...current, { id: `error-${Date.now()}`, role: 'assistant', content: error instanceof Error ? error.message : 'A Luna não respondeu agora.' }]);
@@ -117,8 +151,32 @@ export function LunaPanel({
             <span className="grid size-10 place-items-center rounded-2xl bg-primary text-primary-foreground"><Sparkle size={19} weight="fill" /></span>
             <div><p className="font-semibold tracking-[-0.02em]">Luna 5.6</p><p className="text-xs text-muted-foreground">Sua copilota do casamento</p></div>
           </div>
-          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Fechar Luna"><X size={20} /></Button>
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="icon" onClick={() => setShowHistory((visible) => !visible)} aria-label="Histórico de chats" aria-pressed={showHistory}><ClockCounterClockwise size={20} /></Button>
+            <Button variant="ghost" size="icon" onClick={onClose} aria-label="Fechar Luna"><X size={20} /></Button>
+          </div>
         </header>
+        {showHistory && (
+          <div className="border-b border-border bg-card px-4 py-4 sm:px-5">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-semibold">Histórico de chats</p>
+              <Button type="button" size="sm" variant="outline" onClick={startNewConversation}><Plus /> Novo chat</Button>
+            </div>
+            <div className="mt-3 max-h-52 space-y-1 overflow-y-auto">
+              {conversations.length === 0 && <p className="py-2 text-xs text-muted-foreground">Nenhum chat salvo ainda.</p>}
+              {conversations.map((conversation) => (
+                <button
+                  key={conversation.id}
+                  type="button"
+                  className={`block w-full truncate rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-accent ${conversation.id === conversationId ? 'bg-accent font-medium' : ''}`}
+                  onClick={() => void restoreConversation(conversation.id)}
+                >
+                  {conversation.title}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="flex-1 space-y-5 overflow-y-auto px-4 py-5 sm:px-5">
           {messages.length === 0 && (
             <div className="rounded-3xl bg-secondary p-5">

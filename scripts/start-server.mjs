@@ -4,7 +4,15 @@ import path from 'node:path';
 
 const configPath = path.resolve('dist/server/wrangler.json');
 const config = JSON.parse(await readFile(configPath, 'utf8'));
-const runtimeKeys = ['DATABASE_URL', 'AUTH_USER_ID', 'AUTH_EMAIL', 'AUTH_DISPLAY_NAME', 'AUTH_PASSWORD'];
+const runtimeKeys = [
+  'DATABASE_URL',
+  'AUTH_USER_ID',
+  'AUTH_EMAIL',
+  'AUTH_DISPLAY_NAME',
+  'AUTH_PASSWORD',
+  'OPENAI_API_KEY',
+  'OPENAI_MODEL',
+];
 const runtimeValues = Object.fromEntries(
   runtimeKeys
     .filter((key) => process.env[key])
