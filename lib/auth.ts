@@ -3,6 +3,7 @@ import { env } from 'cloudflare:workers';
 import { db } from './wedding-data';
 import { id, now } from './wedding-data';
 import { base64url, verifyPlainPassword } from './password';
+export { isSameOrigin } from './request-origin';
 
 const SESSION_COOKIE = 'vinculo_session';
 const SESSION_DAYS = 7;
@@ -38,27 +39,6 @@ async function sha256(value: string): Promise<string> {
 
 function clientAddress(request: Request): string {
   return request.headers.get('cf-connecting-ip') ?? request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
-}
-
-export function isSameOrigin(request: Request): boolean {
-  const origin = request.headers.get('origin');
-  if (!origin) return true;
-  try {
-    const receivedOrigin = new URL(origin).origin;
-    const requestUrl = new URL(request.url);
-    const forwardedProto = request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim();
-    const host = request.headers.get('host')?.trim();
-    const requestOrigin = host
-      ? `${forwardedProto || requestUrl.protocol.replace(':', '')}://${host}`
-      : requestUrl.origin;
-
-    // Vinext may expose an internal request URL (for example 0.0.0.0:3000)
-    // while the browser uses the public Host header. Compare against that
-    // externally visible host so local and proxied production requests work.
-    return receivedOrigin === requestOrigin;
-  } catch {
-    return false;
-  }
 }
 
 export async function login(email: string, password: string, request: Request): Promise<{ ok: true; user: AuthUser; token: string } | { ok: false; status: 401 | 429 }> {
