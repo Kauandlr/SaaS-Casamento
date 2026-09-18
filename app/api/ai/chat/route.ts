@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { APIConnectionError, APIConnectionTimeoutError } from 'openai';
 import { z } from 'zod';
 import { closeDb } from '@/db';
 import { getCurrentUser, isSameOrigin } from '@/lib/auth';
@@ -146,11 +147,21 @@ export async function POST(request: Request) {
     if (error instanceof z.ZodError) return NextResponse.json({ error: 'Envie uma mensagem válida.' }, { status: 422 });
     const message = error instanceof Error ? error.message : 'unknown_error';
     const cause = error instanceof Error && error.cause instanceof Error ? error.cause.message : undefined;
-    const isConnectionFailure = /connection error|tls|certificate|fetch failed|issuer/i.test(`${message} ${cause ?? ''}`);
-    console.error('Luna chat failed', { message, cause, endpoint: lunaEndpoint() });
+    const details = `${message} ${cause ?? ''}`;
+    const isTimeout = error instanceof APIConnectionTimeoutError;
+    const isConnectionFailure = error instanceof APIConnectionError || /connection error|tls|certificate|fetch failed|issuer/i.test(details);
+    const isTlsFailure = /tls|certificate|issuer|cert_|self.signed|unable.to.verify/i.test(details);
+    console.error('Luna chat failed', { name: error instanceof Error ? error.name : 'unknown', message, cause, endpoint: lunaEndpoint() });
+    if (isTimeout) {
+      return NextResponse.json({
+        error: 'A conexão com a Luna demorou demais. Tente novamente em instantes.',
+      }, { status: 504 });
+    }
     if (isConnectionFailure) {
       return NextResponse.json({
-        error: 'Falha de conexao com o servico da Luna. Verifique OPENAI_BASE_URL e a cadeia de certificados TLS do endpoint.',
+        error: isTlsFailure
+          ? 'Não foi possível estabelecer uma conexão segura com a Luna. Verifique o certificado TLS do endpoint configurado.'
+          : 'Não foi possível conectar à Luna. Verifique o endereço configurado em OPENAI_BASE_URL e a rede do servidor.',
       }, { status: 503 });
     }
     return NextResponse.json({ error: 'A Luna não conseguiu responder agora.' }, { status: 500 });
