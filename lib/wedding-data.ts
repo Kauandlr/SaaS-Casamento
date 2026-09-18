@@ -1,6 +1,6 @@
 import type { PgPreparedStatement } from '@/db';
 import { getDb } from '@/db';
-import type { WeddingSnapshot } from './wedding-types';
+import type { WeddingPalette, WeddingSnapshot } from './wedding-types';
 
 export type WorkspaceIdentity = {
   userId: string;
@@ -150,6 +150,7 @@ export async function getSnapshot(identity: WorkspaceIdentity): Promise<WeddingS
       budgetCents: number(weddingRow, 'budget_cents'), savedCents: number(weddingRow, 'saved_cents'),
       monthlyCapacityCents: number(weddingRow, 'monthly_capacity_cents'),
       reservePercent: number(weddingRow, 'reserve_percent'), guestEstimate: number(weddingRow, 'guest_estimate'),
+      palette: (weddingRow.palette as WeddingPalette | null) ?? null,
     },
     categories: categoryRows.map((row) => ({ id: text(row, 'id'), name: text(row, 'name'), plannedCents: number(row, 'planned_cents'), contractedCents: number(row, 'contracted_cents'), paidCents: number(row, 'paid_cents') })),
     payments: paymentRows.map((row) => ({ id: text(row, 'id'), title: text(row, 'title'), vendorName: text(row, 'vendor_name'), categoryId: text(row, 'category_id') || null, amountCents: number(row, 'amount_cents'), dueDate: text(row, 'due_date'), status: text(row, 'status'), payer: text(row, 'payer'), linkUrl: text(row, 'link_url') })),

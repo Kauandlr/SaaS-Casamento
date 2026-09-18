@@ -145,6 +145,18 @@ const householdCategorySchema = z.object({
   name: z.string().trim().min(2).max(60),
 });
 
+const paletteSchema = z.object({
+  name: z.string().trim().min(2).max(80),
+  colors: z.array(z.object({
+    name: z.string().trim().min(2).max(40),
+    hex: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+  })).min(2).max(8),
+});
+
+const weddingDateSchema = z.object({
+  weddingDate: z.iso.date(),
+});
+
 export async function POST(request: Request) {
   if (!isSameOrigin(request))
     return NextResponse.json({ error: 'Origem inválida.' }, { status: 403 });
@@ -161,6 +173,36 @@ export async function POST(request: Request) {
     const createdAt = now();
 
     switch (body.action) {
+      case 'update_wedding_date': {
+        const payload = weddingDateSchema.parse(body.payload);
+        await db().batch([
+          db()
+            .prepare('UPDATE weddings SET wedding_date = ?, updated_at = ? WHERE id = ?')
+            .bind(payload.weddingDate, createdAt, weddingId),
+          db()
+            .prepare(`INSERT INTO activity_log (
+              id, wedding_id, user_id, action, entity_type, entity_id, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+            .bind(
+              id(),
+              weddingId,
+              user.userId,
+              'Data do casamento atualizada',
+              'wedding',
+              weddingId,
+              createdAt,
+            ),
+        ]);
+        break;
+      }
+      case 'save_wedding_palette': {
+        const payload = paletteSchema.parse(body.payload);
+        await db()
+          .prepare('UPDATE weddings SET palette = ?::jsonb, updated_at = ? WHERE id = ?')
+          .bind(JSON.stringify(payload), createdAt, weddingId)
+          .run();
+        break;
+      }
       case 'add_payment': {
         const payload = paymentSchema.parse(body.payload);
         const entityId = id();

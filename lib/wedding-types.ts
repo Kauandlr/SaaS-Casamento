@@ -139,6 +139,7 @@ export type WeddingSnapshot = {
     monthlyCapacityCents: number;
     reservePercent: number;
     guestEstimate: number;
+    palette: WeddingPalette | null;
   };
   categories: BudgetCategory[];
   payments: Payment[];
@@ -153,4 +154,9 @@ export type WeddingSnapshot = {
     checklist: HouseholdChecklistItem[];
     payments: HouseholdPayment[];
   };
+};
+
+export type WeddingPalette = {
+  name: string;
+  colors: Array<{ name: string; hex: string }>;
 };

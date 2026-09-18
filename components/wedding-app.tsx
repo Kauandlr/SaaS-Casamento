@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Bell,
+  CalendarDots,
   CaretRight,
   Check,
   CheckCircle,
@@ -16,6 +17,8 @@ import {
   LinkSimple,
   MagnifyingGlass,
   Moon,
+  Palette,
+  PencilSimple,
   Phone,
   Plus,
   Receipt,
@@ -69,11 +72,13 @@ import {
 } from '@/components/household-view';
 import type { WeddingSnapshot } from '@/lib/wedding-types';
 import { LunaPanel } from '@/components/luna-panel';
+import { PaletteView } from '@/components/palette-view';
 
 type View =
   | 'overview'
   | 'finance'
   | 'household'
+  | 'palette'
   | 'vendors'
   | 'guests'
   | 'checklist';
@@ -85,6 +90,8 @@ type ActionName =
   | 'set_guest_rsvp'
   | 'add_task'
   | 'toggle_task'
+  | 'update_wedding_date'
+  | 'save_wedding_palette'
   | HouseholdAction;
 
 const currency = new Intl.NumberFormat('pt-BR', {
@@ -119,6 +126,12 @@ const navItems = [
     label: 'Enxoval',
     mobile: 'Casa',
     icon: HouseLine,
+  },
+  {
+    id: 'palette' as const,
+    label: 'Paleta',
+    mobile: 'Paleta',
+    icon: Palette,
   },
   {
     id: 'vendors' as const,
@@ -172,6 +185,7 @@ export function WeddingApp({
   const [saving, setSaving] = useState(false);
   const [dark, setDark] = useState(false);
   const [lunaOpen, setLunaOpen] = useState(false);
+  const [weddingDateDialogOpen, setWeddingDateDialogOpen] = useState(false);
 
   useEffect(() => {
     dataRef.current = data;
@@ -381,11 +395,13 @@ export function WeddingApp({
     action: ActionName,
     payload: unknown,
     success: string,
+    onSuccess?: () => void,
   ) => {
     setSaving(true);
     try {
       await performAction(action, payload);
       setDialogOpen(false);
+      onSuccess?.();
       toast.add({
         title: success,
         description: 'Os dados já estão atualizados.',
@@ -479,7 +495,7 @@ export function WeddingApp({
               <Button variant="outline" size="sm" onClick={logout}>
                 Sair
               </Button>
-              {view !== 'household' && (
+              {view !== 'household' && view !== 'palette' && (
                 <Button
                   onClick={() => setDialogOpen(true)}
                   className="h-9 rounded-xl px-3"
@@ -493,7 +509,12 @@ export function WeddingApp({
 
           <div className="mx-auto max-w-[1380px] px-4 py-6 md:px-7 md:py-8">
             {view === 'overview' && (
-              <Overview data={data} metrics={metrics} onNavigate={setView} />
+              <Overview
+                data={data}
+                metrics={metrics}
+                onNavigate={setView}
+                onEditWeddingDate={() => setWeddingDateDialogOpen(true)}
+              />
             )}
             {view === 'finance' && (
               <Finance
@@ -512,6 +533,9 @@ export function WeddingApp({
                 search={search}
                 onAction={performAction}
               />
+            )}
+            {view === 'palette' && (
+              <PaletteView data={data} onAction={performAction} />
             )}
             {view === 'vendors' && (
               <Vendors
@@ -544,7 +568,7 @@ export function WeddingApp({
 
           <nav
             aria-label="Navegação mobile"
-            className="fixed inset-x-0 bottom-0 z-30 grid h-[72px] grid-cols-5 border-t border-border bg-background/95 px-1 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden"
+            className="fixed inset-x-0 bottom-0 z-30 grid h-[72px] grid-cols-6 border-t border-border bg-background/95 px-1 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden"
           >
             {mobileNavItems.map(({ id, mobile, icon: Icon }) => (
               <button
@@ -560,7 +584,21 @@ export function WeddingApp({
         </section>
       </main>
       <LunaPanel open={lunaOpen} onClose={() => setLunaOpen(false)} onSnapshot={setData} />
-      {view !== 'household' && (
+      <WeddingDateDialog
+        open={weddingDateDialogOpen}
+        currentDate={data.wedding.weddingDate}
+        saving={saving}
+        onOpenChange={setWeddingDateDialogOpen}
+        onSubmit={(weddingDate) =>
+          submit(
+            'update_wedding_date',
+            { weddingDate },
+            'Data do casamento atualizada',
+            () => setWeddingDateDialogOpen(false),
+          )
+        }
+      />
+      {view !== 'household' && view !== 'palette' && (
         <AddDialog
           view={view}
           open={dialogOpen}
@@ -641,10 +679,12 @@ function Overview({
   data,
   metrics,
   onNavigate,
+  onEditWeddingDate,
 }: {
   data: WeddingSnapshot;
   metrics: Metrics;
   onNavigate: (view: View) => void;
+  onEditWeddingDate: () => void;
 }) {
   const onTrack =
     data.wedding.monthlyCapacityCents >= metrics.generalMonthlyGoal;
@@ -660,11 +700,23 @@ function Overview({
       <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div>
           <div className="mb-2 flex items-center gap-2 text-sm text-muted-foreground">
-            <span>
+            <button
+              type="button"
+              onClick={onEditWeddingDate}
+              title="Alterar dia do casamento"
+              className="group inline-flex items-center gap-1.5 rounded-md px-1 py-0.5 text-left transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <CalendarDots size={15} aria-hidden="true" />
               {new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long' }).format(
                 new Date(`${data.wedding.weddingDate}T12:00:00Z`),
               )}
-            </span>
+              <PencilSimple
+                size={13}
+                aria-hidden="true"
+                className="opacity-50 transition-opacity group-hover:opacity-100"
+              />
+              <span className="sr-only">Alterar dia do casamento</span>
+            </button>
             <span className="size-1 rounded-full bg-border" />
             <span>{metrics.days} dias restantes</span>
           </div>
@@ -1325,6 +1377,72 @@ function Checklist({
   );
 }
 
+function WeddingDateDialog({
+  open,
+  currentDate,
+  saving,
+  onOpenChange,
+  onSubmit,
+}: {
+  open: boolean;
+  currentDate: string;
+  saving: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSubmit: (weddingDate: string) => void | Promise<void>;
+}) {
+  const [value, setValue] = useState(currentDate);
+
+  useEffect(() => {
+    if (open) setValue(currentDate);
+  }, [currentDate, open]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Alterar dia do casamento</DialogTitle>
+          <DialogDescription>
+            A nova data atualiza os dias restantes e as metas mensais do planejamento.
+          </DialogDescription>
+        </DialogHeader>
+        <form
+          className="grid gap-5"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (value) void onSubmit(value);
+          }}
+        >
+          <label htmlFor="wedding-date" className="grid gap-2 text-sm font-medium">
+            Data do casamento
+            <Input
+              id="wedding-date"
+              name="weddingDate"
+              type="date"
+              value={value}
+              onChange={(event) => setValue(event.target.value)}
+              required
+              autoFocus
+            />
+          </label>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={saving}
+            >
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={saving || !value}>
+              {saving ? 'Salvando...' : 'Salvar data'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function AddDialog({
   view,
   open,
@@ -1340,7 +1458,7 @@ function AddDialog({
   onOpenChange: (value: boolean) => void;
   onSubmit: (action: ActionName, payload: unknown, success: string) => void;
 }) {
-  const kind = view === 'overview' || view === 'household' ? 'checklist' : view;
+  const kind = view === 'overview' || view === 'household' || view === 'palette' ? 'checklist' : view;
   const titles = {
     finance: ['Novo pagamento', 'Registre um vencimento real.'],
     vendors: ['Novo fornecedor', 'Adicione uma proposta para comparar.'],
