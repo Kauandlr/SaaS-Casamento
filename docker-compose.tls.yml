@@ -1,0 +1,11 @@
+# Use only when the deployment's HTTPS proxy presents a certificate signed by
+# an organization-controlled CA. Keep the CA PEM on the host, outside Git.
+services:
+  app:
+    environment:
+      NODE_EXTRA_CA_CERTS: /run/certs/openai-egress-ca.pem
+    volumes:
+      - type: bind
+        source: ${OPENAI_CA_CERT_FILE:?Set OPENAI_CA_CERT_FILE to the absolute path of the trusted CA PEM}
+        target: /run/certs/openai-egress-ca.pem
+        read_only: true

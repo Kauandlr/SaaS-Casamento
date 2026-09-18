@@ -11,6 +11,7 @@ export function LoginForm() {
   const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [capsLock, setCapsLock] = useState(false);
 
   async function submit(form: FormData) {
     setPending(true);
@@ -48,6 +49,12 @@ export function LoginForm() {
                 name="password"
                 type={showPassword ? 'text' : 'password'}
                 autoComplete="current-password"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                onKeyDown={(event) => setCapsLock(event.getModifierState('CapsLock'))}
+                onKeyUp={(event) => setCapsLock(event.getModifierState('CapsLock'))}
+                onBlur={() => setCapsLock(false)}
                 className="pr-10"
                 required
               />
@@ -63,6 +70,7 @@ export function LoginForm() {
                 {showPassword ? <EyeSlash aria-hidden="true" /> : <Eye aria-hidden="true" />}
               </Button>
             </div>
+            {capsLock && <p className="text-sm text-muted-foreground" role="status">Caps Lock está ativado.</p>}
           </div>
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
           <Button className="w-full" type="submit" disabled={pending}>{pending ? 'Entrando…' : 'Entrar'}</Button>
