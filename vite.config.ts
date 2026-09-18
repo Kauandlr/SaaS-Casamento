@@ -26,6 +26,7 @@ export default defineConfig(async ({ mode }) => {
         AUTH_PASSWORD_HASH: values.AUTH_PASSWORD_HASH,
         OPENAI_API_KEY: values.OPENAI_API_KEY,
         OPENAI_MODEL: values.OPENAI_MODEL ?? 'gpt-5.6-luna',
+        OPENAI_BASE_URL: values.OPENAI_BASE_URL,
       }).filter((entry): entry is [string, string] => Boolean(entry[1])),
     ),
     d1_databases: d1

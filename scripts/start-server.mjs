@@ -12,6 +12,7 @@ const runtimeKeys = [
   'AUTH_PASSWORD',
   'OPENAI_API_KEY',
   'OPENAI_MODEL',
+  'OPENAI_BASE_URL',
 ];
 const runtimeValues = Object.fromEntries(
   runtimeKeys

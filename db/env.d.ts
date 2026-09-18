@@ -8,5 +8,6 @@ declare namespace Cloudflare {
     AUTH_PASSWORD?: string;
     OPENAI_API_KEY?: string;
     OPENAI_MODEL?: string;
+    OPENAI_BASE_URL?: string;
   }
 }

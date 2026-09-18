@@ -5,6 +5,7 @@ import { getCurrentUser, isSameOrigin } from '@/lib/auth';
 import { db, getSnapshot, id, now, requireWeddingId } from '@/lib/wedding-data';
 import {
   lunaClient,
+  lunaEndpoint,
   lunaInstructions,
   lunaModel,
   lunaProposalSchema,
@@ -143,7 +144,15 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     if (error instanceof z.ZodError) return NextResponse.json({ error: 'Envie uma mensagem válida.' }, { status: 422 });
-    console.error('Luna chat failed', error instanceof Error ? error.message : 'unknown_error');
+    const message = error instanceof Error ? error.message : 'unknown_error';
+    const cause = error instanceof Error && error.cause instanceof Error ? error.cause.message : undefined;
+    const isConnectionFailure = /connection error|tls|certificate|fetch failed|issuer/i.test(`${message} ${cause ?? ''}`);
+    console.error('Luna chat failed', { message, cause, endpoint: lunaEndpoint() });
+    if (isConnectionFailure) {
+      return NextResponse.json({
+        error: 'Falha de conexao com o servico da Luna. Verifique OPENAI_BASE_URL e a cadeia de certificados TLS do endpoint.',
+      }, { status: 503 });
+    }
     return NextResponse.json({ error: 'A Luna não conseguiu responder agora.' }, { status: 500 });
   } finally {
     await closeDb();
