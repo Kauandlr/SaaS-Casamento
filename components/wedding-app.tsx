@@ -426,7 +426,7 @@ export function WeddingApp({
   return (
     <Toaster>
       <main className="min-h-[100dvh] bg-background text-foreground md:grid md:grid-cols-[232px_minmax(0,1fr)]">
-        <aside className="hidden border-r border-sidebar-border bg-sidebar md:flex md:min-h-[100dvh] md:flex-col md:px-3 md:py-4">
+        <aside className="hidden border-r border-sidebar-border bg-sidebar md:sticky md:top-0 md:flex md:h-dvh md:self-start md:flex-col md:overflow-y-auto md:px-3 md:py-4">
           <Brand />
           <nav aria-label="Navegação principal" className="mt-8 space-y-1">
             {navItems.map(({ id, label, icon: Icon }) => (
