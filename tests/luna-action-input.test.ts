@@ -5,6 +5,18 @@ import { lunaProposalFromToolCall } from '@/lib/luna-proposal';
 import { lunaTools } from '@/lib/luna-tools';
 import { explainActionValidationError, weddingActionNames } from '@/lib/wedding-action-input';
 
+const supportedFormats = new Set([
+  'date-time',
+  'time',
+  'date',
+  'duration',
+  'email',
+  'hostname',
+  'ipv4',
+  'ipv6',
+  'uuid',
+]);
+
 function assertStrictObjects(value: unknown): void {
   if (Array.isArray(value)) {
     value.forEach(assertStrictObjects);
@@ -12,6 +24,10 @@ function assertStrictObjects(value: unknown): void {
   }
   if (!value || typeof value !== 'object') return;
   const schema = value as Record<string, unknown>;
+  if (typeof schema.format === 'string') assert.ok(supportedFormats.has(schema.format));
+  assert.equal('minLength' in schema, false);
+  assert.equal('maxLength' in schema, false);
+  assert.equal('const' in schema, false);
   if (schema.type === 'object') {
     assert.equal(schema.additionalProperties, false);
     const properties = schema.properties as Record<string, unknown> | undefined;

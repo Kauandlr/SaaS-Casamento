@@ -34,21 +34,55 @@ const actionDescriptions: Record<WeddingActionName, string> = {
   add_household_category: 'Cadastrar categoria do enxoval. Exige o nome.',
 };
 
+const supportedStringFormats = new Set([
+  'date-time',
+  'time',
+  'date',
+  'duration',
+  'email',
+  'hostname',
+  'ipv4',
+  'ipv6',
+  'uuid',
+]);
+
 function strictToolSchema(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(strictToolSchema);
   if (!value || typeof value !== 'object') return value;
 
   const source = value as Record<string, unknown>;
+  const unsupportedFormat =
+    typeof source.format === 'string' && !supportedStringFormats.has(source.format)
+      ? source.format
+      : undefined;
   const result = Object.fromEntries(
     Object.entries(source)
-      .filter(([key]) => key !== '$schema' && key !== 'default')
+      .filter(
+        ([key]) =>
+          key !== '$schema' &&
+          key !== 'default' &&
+          key !== 'minLength' &&
+          key !== 'maxLength' &&
+          !(key === 'format' && unsupportedFormat),
+      )
       .map(([key, entry]) => [key, strictToolSchema(entry)]),
   );
+  if ('const' in result) {
+    result.enum = [result.const];
+    delete result.const;
+  }
   if ('default' in source) {
     const defaultDescription = `Valor padrão seguro: ${JSON.stringify(source.default)}.`;
     result.description = result.description
       ? `${String(result.description)} ${defaultDescription}`
       : defaultDescription;
+  }
+  if (unsupportedFormat === 'uri') {
+    result.pattern ??= '^https?://.+';
+    const urlDescription = 'URL absoluta iniciada por http:// ou https://.';
+    result.description = result.description
+      ? `${String(result.description)} ${urlDescription}`
+      : urlDescription;
   }
   return result;
 }
