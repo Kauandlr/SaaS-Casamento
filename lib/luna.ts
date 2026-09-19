@@ -1,33 +1,18 @@
 import OpenAI from 'openai';
 import { env } from 'cloudflare:workers';
-import { z } from 'zod';
 import type { WeddingSnapshot } from './wedding-types';
+import { householdItemToolPayloadSchema } from './household-item-input';
+import { lunaActions } from './luna-proposal';
+export {
+  lunaActions,
+  lunaProposalFromToolCall,
+  lunaProposalSchema,
+  type LunaProposal,
+} from './luna-proposal';
 
-export const lunaActions = [
-  'add_payment',
-  'mark_payment_paid',
-  'add_vendor',
-  'add_guest',
-  'set_guest_rsvp',
-  'add_task',
-  'toggle_task',
-  'add_household_item',
-  'record_household_purchase',
-  'record_household_gift',
-  'update_household_plan',
-  'add_household_task',
-  'toggle_household_task',
-  'add_household_category',
-] as const;
-
-export const lunaProposalSchema = z.object({
-  action: z.enum(lunaActions),
-  title: z.string().trim().min(2).max(120),
-  summary: z.string().trim().min(2).max(500),
-  payload: z.record(z.string(), z.unknown()),
-});
-
-export type LunaProposal = z.infer<typeof lunaProposalSchema> & { id: string; status: string };
+const genericLunaActions = lunaActions.filter(
+  (action) => action !== 'add_household_item',
+);
 
 export function lunaClient(): OpenAI | null {
   const values = env as unknown as Record<string, string | undefined>;
@@ -72,7 +57,7 @@ Responda sempre em português do Brasil, com clareza, acolhimento e objetividade
 Você conhece somente o casamento presente no contexto. Nunca invente IDs, valores, datas ou registros.
 Hoje é {{today}}.
 
-Você pode ajudar a consultar o planejamento e propor ações reais. Quando o usuário pedir para cadastrar, alterar, quitar, registrar ou marcar algo, use a função propose_wedding_action.
+Você pode ajudar a consultar o planejamento e propor ações reais. Para cadastrar um item do enxoval, use propose_household_item. Para cadastrar, alterar, quitar, registrar ou marcar qualquer outra coisa, use propose_wedding_action.
 Para ações de criação, preencha todos os campos exigidos usando valores seguros e coerentes. Datas devem ser YYYY-MM-DD. Valores monetários devem ser inteiros em centavos.
 Se faltar uma informação essencial, faça uma pergunta curta em vez de criar uma proposta incompleta.
 Nunca diga que uma alteração foi feita antes da confirmação do usuário. Explique que a proposta aparecerá para revisão.
@@ -82,13 +67,33 @@ Você pode propor várias ações quando o pedido contiver vários cadastros, ma
 export const lunaTools = [
   {
     type: 'function' as const,
+    name: 'propose_household_item',
+    description:
+      'Prepara o cadastro de um item do enxoval para o usuário revisar e confirmar. Pode ser chamada mais de uma vez quando houver vários itens.',
+    strict: false,
+    parameters: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'Título curto da proposta.' },
+        summary: {
+          type: 'string',
+          description: 'Resumo dos dados do item que serão gravados.',
+        },
+        payload: householdItemToolPayloadSchema,
+      },
+      required: ['title', 'summary', 'payload'],
+      additionalProperties: false,
+    },
+  },
+  {
+    type: 'function' as const,
     name: 'propose_wedding_action',
     description: 'Prepara uma alteração ou cadastro no casamento para o usuário revisar e confirmar.',
     strict: false,
     parameters: {
       type: 'object',
       properties: {
-        action: { type: 'string', enum: lunaActions },
+        action: { type: 'string', enum: genericLunaActions },
         title: { type: 'string', description: 'Título curto da proposta.' },
         summary: { type: 'string', description: 'Resumo dos campos que serão gravados.' },
         payload: { type: 'object', additionalProperties: true },

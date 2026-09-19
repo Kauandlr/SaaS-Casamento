@@ -9,7 +9,7 @@ import {
   lunaEndpoint,
   lunaInstructions,
   lunaModel,
-  lunaProposalSchema,
+  lunaProposalFromToolCall,
   lunaTools,
   weddingContext,
   type LunaProposal,
@@ -116,9 +116,10 @@ export async function POST(request: Request) {
     });
     const proposals: Array<LunaProposal> = [];
     for (const item of response.output as unknown as Array<Record<string, unknown>>) {
-      if (item.type !== 'function_call' || item.name !== 'propose_wedding_action') continue;
+      if (item.type !== 'function_call') continue;
       try {
-        const parsed = lunaProposalSchema.parse(JSON.parse(String(item.arguments)));
+        const parsed = lunaProposalFromToolCall(item.name, item.arguments);
+        if (!parsed) continue;
         proposals.push({ ...parsed, id: id(), status: 'pendente' });
       } catch (error) {
         console.error('Invalid Luna proposal', error instanceof Error ? error.message : 'unknown_error');

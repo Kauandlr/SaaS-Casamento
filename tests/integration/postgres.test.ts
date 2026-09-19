@@ -22,6 +22,8 @@ after(async () => { await client.end(); });
 void test('migration creates the complete schema without domain seeds', async () => {
   const tables = await client.query<{ tablename: string }>(`SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename NOT LIKE '__drizzle%'`);
   assert.equal(tables.rowCount, 23);
+  const paletteColumn = await client.query<{ data_type: string }>(`SELECT data_type FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'weddings' AND column_name = 'palette'`);
+  assert.equal(paletteColumn.rows[0]?.data_type, 'jsonb');
   const counts = await client.query<{ count: string }>('SELECT (SELECT count(*) FROM weddings) + (SELECT count(*) FROM payments) + (SELECT count(*) FROM vendors) + (SELECT count(*) FROM guests) + (SELECT count(*) FROM household_items) AS count');
   assert.equal(counts.rows[0].count, '0');
 });
@@ -41,6 +43,9 @@ void test('workspace base records and session lifecycle are isolated by user', a
     await client.query(`INSERT INTO wedding_members (wedding_id,user_id,email,role,permissions,created_at) VALUES ($1,'owner','owner@test.local','owner','["*"]',now())`, [weddingId]);
     await client.query(`INSERT INTO household_plans (wedding_id,target_date,created_at,updated_at) VALUES ($1,'2027-06-12',now(),now())`, [weddingId]);
     await client.query(`INSERT INTO auth_sessions (user_id,token_hash,expires_at,created_at) VALUES ('owner','session-hash',now() + interval '7 days',now())`);
+    const palette = { name: 'Jardim', colors: [{ name: 'Oliva', hex: '#6B7558' }, { name: 'Areia', hex: '#D8C8AE' }] };
+    const savedPalette = await client.query<{ palette: typeof palette }>('UPDATE weddings SET palette = $1::jsonb WHERE id = $2 RETURNING palette', [JSON.stringify(palette), weddingId]);
+    assert.deepEqual(savedPalette.rows[0]?.palette, palette);
     const visible = await client.query('SELECT w.id FROM weddings w JOIN wedding_members m ON m.wedding_id = w.id WHERE m.user_id = $1', ['owner']);
     assert.equal(visible.rowCount, 1);
     const active = await client.query('SELECT count(*) AS count FROM auth_sessions WHERE token_hash = $1 AND expires_at > now()', ['session-hash']);

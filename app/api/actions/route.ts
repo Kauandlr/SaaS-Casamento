@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { getCurrentUser, isSameOrigin } from '@/lib/auth';
 import { db, getSnapshot, id, now, requireWeddingId } from '@/lib/wedding-data';
 import { closeDb } from '@/db';
+import { householdItemInputSchema } from '@/lib/household-item-input';
 
 const linkUrlSchema = z
   .string()
@@ -68,41 +69,6 @@ const rsvpSchema = idSchema.extend({
     'não irá',
     'talvez',
   ]),
-});
-
-const householdItemSchema = z.object({
-  name: z.string().trim().min(2).max(120),
-  categoryId: z.uuid().nullable(),
-  desiredQuantity: z.number().int().positive().max(999),
-  priority: z.enum(['essencial', 'importante', 'pode esperar', 'opcional']),
-  status: z.enum([
-    'precisamos',
-    'pesquisando',
-    'escolhido',
-    'comprado',
-    'recebido de presente',
-    'já possuímos',
-    'não comprar agora',
-    'removido da lista',
-  ]),
-  estimatedUnitCents: z.number().int().nonnegative().max(100_000_000),
-  minPriceCents: z.number().int().nonnegative().max(100_000_000),
-  maxPriceCents: z.number().int().nonnegative().max(100_000_000),
-  brand: z.string().trim().max(80).default(''),
-  model: z.string().trim().max(100).default(''),
-  store: z.string().trim().max(100).default(''),
-  productUrl: z.string().trim().pipe(z.url()).or(z.literal('')),
-  responsible: z.string().trim().min(2).max(60),
-  giftIntent: z.enum(['comprar', 'lista de presentes', 'ambos', 'a decidir']),
-  purchaseTiming: z.enum([
-    'comprar agora',
-    'próximos meses',
-    'antes do casamento',
-    'comprar próximo ao casamento',
-    'depois do casamento',
-  ]),
-  desiredDate: z.iso.date().nullable(),
-  notes: z.string().trim().max(800).default(''),
 });
 
 const householdPlanSchema = z.object({
@@ -452,7 +418,7 @@ export async function POST(request: Request) {
         break;
       }
       case 'add_household_item': {
-        const payload = householdItemSchema.parse(body.payload);
+        const payload = householdItemInputSchema.parse(body.payload);
         if (payload.categoryId) {
           const category = await db()
             .prepare(
