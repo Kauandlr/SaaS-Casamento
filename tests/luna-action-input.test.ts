@@ -25,6 +25,9 @@ function assertStrictObjects(value: unknown): void {
   if (!value || typeof value !== 'object') return;
   const schema = value as Record<string, unknown>;
   if (typeof schema.format === 'string') assert.ok(supportedFormats.has(schema.format));
+  if (typeof schema.pattern === 'string') {
+    assert.doesNotMatch(schema.pattern, /\(\?(?:[=!]|<[=!])/);
+  }
   assert.equal('minLength' in schema, false);
   assert.equal('maxLength' in schema, false);
   assert.equal('const' in schema, false);
@@ -73,6 +76,17 @@ void test('guest tool exposes the required choices instead of an open payload', 
   assert.ok(payload.required.includes('ageGroup'));
   assert.deepEqual(payload.properties.side.enum, ['Pessoa 1', 'Pessoa 2', 'Ambos']);
   assert.deepEqual(payload.properties.ageGroup.enum, ['adulto', 'adolescente', 'criança', 'bebê']);
+});
+
+void test('email schema uses the supported format without regex lookaround', () => {
+  const tool = lunaTools.find((candidate) => candidate.name === 'propose_add_vendor');
+  assert.ok(tool);
+  const payload = tool.parameters.properties.payload as {
+    properties: Record<string, { anyOf?: Array<Record<string, unknown>> }>;
+  };
+  const emailSchema = payload.properties.email.anyOf?.[0];
+  assert.equal(emailSchema?.format, 'email');
+  assert.equal('pattern' in (emailSchema ?? {}), false);
 });
 
 void test('rejects an incomplete guest proposal and explains what must be confirmed', () => {

@@ -46,6 +46,10 @@ const supportedStringFormats = new Set([
   'uuid',
 ]);
 
+function usesUnsupportedRegexLookaround(value: unknown): boolean {
+  return typeof value === 'string' && /\(\?(?:[=!]|<[=!])/.test(value);
+}
+
 function strictToolSchema(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(strictToolSchema);
   if (!value || typeof value !== 'object') return value;
@@ -63,6 +67,7 @@ function strictToolSchema(value: unknown): unknown {
           key !== 'default' &&
           key !== 'minLength' &&
           key !== 'maxLength' &&
+          !(key === 'pattern' && usesUnsupportedRegexLookaround(source.pattern)) &&
           !(key === 'format' && unsupportedFormat),
       )
       .map(([key, entry]) => [key, strictToolSchema(entry)]),

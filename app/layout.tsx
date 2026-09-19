@@ -10,7 +10,10 @@ export const metadata: Metadata = {
   title: 'Vínculo — Wedding Planning OS',
   description:
     'Planejamento financeiro, fornecedores, convidados e tarefas do casamento em um só lugar.',
-  icons: { icon: '/favicon.svg' },
+  icons: {
+    icon: [{ url: '/favicon.svg', type: 'image/svg+xml', sizes: 'any' }],
+    shortcut: '/favicon.svg',
+  },
   robots: { index: false, follow: false },
   openGraph: {
     title: 'Vínculo — Wedding Planning OS',
