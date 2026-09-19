@@ -1,9 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
-import {
-  householdItemInputSchema,
-  householdItemToolPayloadSchema,
-} from '@/lib/household-item-input';
+import { householdItemInputSchema } from '@/lib/household-item-input';
 import { lunaProposalFromToolCall } from '@/lib/luna-proposal';
 
 void test('fills safe defaults for an AI-created household item', () => {
@@ -33,17 +30,6 @@ void test('fills safe defaults for an AI-created household item', () => {
     desiredDate: null,
     notes: '',
   });
-});
-
-void test('keeps the AI tool contract aligned with the required item fields', () => {
-  assert.deepEqual(householdItemToolPayloadSchema.required, [
-    'name',
-    'desiredQuantity',
-    'priority',
-    'estimatedUnitCents',
-  ]);
-  assert.ok('status' in householdItemToolPayloadSchema.properties);
-  assert.ok('giftIntent' in householdItemToolPayloadSchema.properties);
 });
 
 void test('turns the dedicated item tool call into a confirmable proposal', () => {

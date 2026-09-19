@@ -14,6 +14,7 @@ import {
   weddingContext,
   type LunaProposal,
 } from '@/lib/luna';
+import { explainActionValidationError } from '@/lib/wedding-action-input';
 
 const requestSchema = z.object({
   message: z.string().trim().min(1).max(4000),
@@ -172,12 +173,14 @@ export async function POST(request: Request) {
       }
       const proposals: Array<LunaProposal> = [];
       let proposalCalls = 0;
-      let invalidProposalCalls = 0;
+      const validationPrompts: string[] = [];
       for (const item of response.output as unknown as Array<Record<string, unknown>>) {
         if (item.type !== 'function_call') continue;
         proposalCalls += 1;
         if (item.status === 'incomplete') {
-          invalidProposalCalls += 1;
+          validationPrompts.push(
+            'Não consegui completar os dados da proposta. Pode repetir os detalhes que deseja cadastrar?',
+          );
           continue;
         }
         try {
@@ -185,27 +188,26 @@ export async function POST(request: Request) {
           if (!parsed) continue;
           proposals.push({ ...parsed, id: id(), status: 'pendente' });
         } catch (error) {
-          invalidProposalCalls += 1;
+          validationPrompts.push(
+            error instanceof z.ZodError
+              ? explainActionValidationError(error)
+              : 'Não consegui validar todos os dados. Pode confirmar as informações obrigatórias?',
+          );
           console.error(
             'Invalid Luna proposal',
             error instanceof Error ? error.message : 'unknown_error',
           );
         }
       }
-      if (proposalCalls > 0 && (invalidProposalCalls > 0 || proposals.length === 0)) {
-        return NextResponse.json(
-          {
-            error:
-              'A Luna gerou uma proposta incompleta. Tente novamente com um pedido mais direto.',
-          },
-          { status: 502 },
-        );
-      }
       const assistantContent =
-        response.output_text?.trim() ||
-        (proposals.length
-          ? 'Preparei as alterações abaixo para vocês revisarem antes de salvar.'
-          : 'Posso ajudar a consultar ou organizar o planejamento. O que vocês querem fazer?');
+        validationPrompts.length > 0
+          ? [...new Set(validationPrompts)].join(' ')
+          : response.output_text?.trim() ||
+            (proposals.length
+              ? 'Preparei as alterações abaixo para vocês revisarem antes de salvar.'
+              : proposalCalls > 0
+                ? 'Não consegui preparar a proposta. Pode confirmar os dados obrigatórios?'
+                : 'Posso ajudar a consultar ou organizar o planejamento. O que vocês querem fazer?');
       const assistantId = id();
       const responseTimestamp = now();
       const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();

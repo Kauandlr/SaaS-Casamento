@@ -1,21 +1,12 @@
 import { z } from 'zod';
+import {
+  isWeddingActionName,
+  parseWeddingActionPayload,
+  weddingActionNames,
+  type WeddingActionName,
+} from './wedding-action-input';
 
-export const lunaActions = [
-  'add_payment',
-  'mark_payment_paid',
-  'add_vendor',
-  'add_guest',
-  'set_guest_rsvp',
-  'add_task',
-  'toggle_task',
-  'add_household_item',
-  'record_household_purchase',
-  'record_household_gift',
-  'update_household_plan',
-  'add_household_task',
-  'toggle_household_task',
-  'add_household_category',
-] as const;
+export const lunaActions = weddingActionNames;
 
 export const lunaProposalSchema = z.object({
   action: z.enum(lunaActions),
@@ -33,20 +24,26 @@ export function lunaProposalFromToolCall(
   toolName: unknown,
   argumentsJson: unknown,
 ): z.infer<typeof lunaProposalSchema> | null {
-  if (
-    toolName !== 'propose_wedding_action' &&
-    toolName !== 'propose_household_item'
-  ) {
-    return null;
+  let action: WeddingActionName | undefined;
+  if (toolName === 'propose_household_item') action = 'add_household_item';
+  else if (typeof toolName === 'string' && toolName.startsWith('propose_')) {
+    const candidate = toolName.slice('propose_'.length);
+    if (isWeddingActionName(candidate)) action = candidate;
   }
+  if (toolName !== 'propose_wedding_action' && !action) return null;
 
   const parsedArguments = JSON.parse(String(argumentsJson)) as unknown;
   const proposal =
-    toolName === 'propose_household_item' &&
-    parsedArguments &&
-    typeof parsedArguments === 'object'
-      ? { ...parsedArguments, action: 'add_household_item' }
+    action && parsedArguments && typeof parsedArguments === 'object'
+      ? { ...parsedArguments, action }
       : parsedArguments;
 
-  return lunaProposalSchema.parse(proposal);
+  const parsedProposal = lunaProposalSchema.parse(proposal);
+  return {
+    ...parsedProposal,
+    payload: parseWeddingActionPayload(parsedProposal.action, parsedProposal.payload) as Record<
+      string,
+      unknown
+    >,
+  };
 }

@@ -4,117 +4,22 @@ import { getCurrentUser, isSameOrigin, type AuthUser } from '@/lib/auth';
 import { db, getSnapshot, id, now, requireWeddingId } from '@/lib/wedding-data';
 import { withRequestDb } from '@/db';
 import { householdItemInputSchema } from '@/lib/household-item-input';
-
-const linkUrlSchema = z
-  .string()
-  .trim()
-  .max(2048)
-  .refine(
-    (value) => value === '' || /^https?:\/\//i.test(value),
-    'Informe um link iniciado por http:// ou https://.',
-  )
-  .default('');
-
-const paymentSchema = z.object({
-  title: z.string().trim().min(2).max(100),
-  vendorName: z.string().trim().max(100).default(''),
-  categoryId: z.uuid().nullable(),
-  amountCents: z.number().int().positive().max(100_000_000),
-  dueDate: z.iso.date(),
-  payer: z.string().trim().min(2).max(40),
-  linkUrl: linkUrlSchema,
-});
-
-const vendorSchema = z.object({
-  name: z.string().trim().min(2).max(100),
-  company: z.string().trim().max(100).default(''),
-  category: z.string().trim().min(2).max(60),
-  phone: z.string().trim().max(30).default(''),
-  email: z.string().trim().pipe(z.email()).or(z.literal('')),
-  linkUrl: linkUrlSchema,
-  quotedCents: z.number().int().nonnegative().max(100_000_000),
-  status: z.enum(['pesquisando', 'favorito', 'negociando', 'contratado']),
-});
-
-const guestSchema = z.object({
-  fullName: z.string().trim().min(2).max(120),
-  side: z.enum(['Pessoa 1', 'Pessoa 2', 'Ambos']),
-  groupName: z.string().trim().max(100).default(''),
-  ageGroup: z.enum(['adulto', 'adolescente', 'criança', 'bebê']),
-  rsvp: z.enum(['ainda não convidado', 'aguardando', 'confirmado', 'não irá', 'talvez']),
-  linkUrl: linkUrlSchema,
-});
-
-const taskSchema = z.object({
-  title: z.string().trim().min(2).max(140),
-  category: z.string().trim().min(2).max(60),
-  responsible: z.string().trim().min(2).max(60),
-  priority: z.enum(['essencial', 'importante', 'opcional', 'dispensável']),
-  dueDate: z.iso.date(),
-  linkUrl: linkUrlSchema,
-});
-
-const idSchema = z.object({ id: z.uuid() });
-const rsvpSchema = idSchema.extend({
-  rsvp: z.enum(['ainda não convidado', 'aguardando', 'confirmado', 'não irá', 'talvez']),
-});
-
-const householdPlanSchema = z.object({
-  budgetCents: z.number().int().nonnegative().max(100_000_000),
-  allocatedSavingsCents: z.number().int().nonnegative().max(100_000_000),
-  includeInGeneral: z.boolean(),
-  targetDate: z.iso.date(),
-  housingType: z.enum([
-    'imóvel próprio',
-    'aluguel',
-    'morar com familiares temporariamente',
-    'ainda não definido',
-  ]),
-});
-
-const householdPurchaseSchema = idSchema.extend({
-  quantity: z.number().int().positive().max(999),
-  amountCents: z.number().int().nonnegative().max(100_000_000),
-  paymentMethod: z.enum(['à vista', 'entrada', 'parcelado']),
-  installments: z.number().int().positive().max(48),
-  purchasedAt: z.iso.date(),
-});
-
-const householdGiftSchema = idSchema.extend({
-  quantity: z.number().int().positive().max(999),
-  giver: z.string().trim().min(2).max(120),
-  giftedAt: z.iso.date(),
-  approximateValueCents: z.number().int().nonnegative().max(100_000_000),
-  notes: z.string().trim().max(500).default(''),
-});
-
-const householdTaskSchema = z.object({
-  title: z.string().trim().min(2).max(140),
-  responsible: z.string().trim().min(2).max(60),
-  dueDate: z.iso.date(),
-  linkUrl: linkUrlSchema,
-});
-
-const householdCategorySchema = z.object({
-  name: z.string().trim().min(2).max(60),
-});
-
-const paletteSchema = z.object({
-  name: z.string().trim().min(2).max(80),
-  colors: z
-    .array(
-      z.object({
-        name: z.string().trim().min(2).max(40),
-        hex: z.string().regex(/^#[0-9a-fA-F]{6}$/),
-      }),
-    )
-    .min(2)
-    .max(8),
-});
-
-const weddingDateSchema = z.object({
-  weddingDate: z.iso.date(),
-});
+import {
+  explainActionValidationError,
+  guestSchema,
+  householdCategorySchema,
+  householdGiftSchema,
+  householdPlanSchema,
+  householdPurchaseSchema,
+  householdTaskSchema,
+  idSchema,
+  paletteSchema,
+  paymentSchema,
+  rsvpSchema,
+  taskSchema,
+  vendorSchema,
+  weddingDateSchema,
+} from '@/lib/wedding-action-input';
 
 export async function executeWeddingAction(
   user: AuthUser,
@@ -659,7 +564,7 @@ export async function executeWeddingAction(
     return NextResponse.json({ snapshot });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: 'Revise os campos informados.' }, { status: 422 });
+      return NextResponse.json({ error: explainActionValidationError(error) }, { status: 422 });
     }
     console.error(
       'Wedding action failed',
