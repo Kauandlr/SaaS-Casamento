@@ -9,15 +9,14 @@ const runtimeKeys = [
   'AUTH_USER_ID',
   'AUTH_EMAIL',
   'AUTH_DISPLAY_NAME',
+  'AUTH_PASSWORD_HASH',
   'AUTH_PASSWORD',
   'OPENAI_API_KEY',
   'OPENAI_MODEL',
   'OPENAI_BASE_URL',
 ];
 const runtimeValues = Object.fromEntries(
-  runtimeKeys
-    .filter((key) => process.env[key])
-    .map((key) => [key, process.env[key]]),
+  runtimeKeys.filter((key) => process.env[key]).map((key) => [key, process.env[key]]),
 );
 
 config.vars = { ...config.vars, ...runtimeValues };

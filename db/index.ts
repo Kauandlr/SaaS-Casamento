@@ -1,4 +1,5 @@
 import { env } from 'cloudflare:workers';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { Client, type QueryResultRow } from 'pg';
 
 type BoundStatement = { sql: string; params: unknown[] };
@@ -17,8 +18,8 @@ function parameterize(sql: string): string {
 }
 
 function connectionString(): string {
-  const hyperdrive = (env as unknown as { HYPERDRIVE?: { connectionString?: string } })
-    .HYPERDRIVE?.connectionString;
+  const hyperdrive = (env as unknown as { HYPERDRIVE?: { connectionString?: string } }).HYPERDRIVE
+    ?.connectionString;
   const configured = hyperdrive ?? (env as unknown as { DATABASE_URL?: string }).DATABASE_URL;
   if (!configured) throw new Error('DATABASE_URL ou binding HYPERDRIVE não configurado.');
   return configured;
@@ -31,7 +32,9 @@ class PostgresDatabase {
     if (!this.clientPromise) {
       const client = new Client({ connectionString: connectionString() });
       this.clientPromise = client.connect().then(() => client);
-      this.clientPromise.catch(() => { this.clientPromise = null; });
+      this.clientPromise.catch(() => {
+        this.clientPromise = null;
+      });
     }
     return this.clientPromise;
   }
@@ -44,16 +47,22 @@ class PostgresDatabase {
         return prepared;
       },
       first: async <T extends QueryResultRow = QueryResultRow>() => {
-        const result = await (await this.client()).query<T>(prepared.statement.sql, prepared.statement.params);
+        const result = await (
+          await this.client()
+        ).query<T>(prepared.statement.sql, prepared.statement.params);
         const row = result.rows[0] as T | undefined;
         return row ?? null;
       },
       all: async <T extends QueryResultRow>() => {
-        const result = await (await this.client()).query<T>(prepared.statement.sql, prepared.statement.params);
+        const result = await (
+          await this.client()
+        ).query<T>(prepared.statement.sql, prepared.statement.params);
         return { results: result.rows };
       },
       run: async () => {
-        const result = await (await this.client()).query(prepared.statement.sql, prepared.statement.params);
+        const result = await (
+          await this.client()
+        ).query(prepared.statement.sql, prepared.statement.params);
         return { meta: { changes: result.rowCount ?? 0 } };
       },
     };
@@ -64,7 +73,8 @@ class PostgresDatabase {
     const client = await this.client();
     await client.query('BEGIN');
     try {
-      for (const statement of statements) await client.query(statement.statement.sql, statement.statement.params);
+      for (const statement of statements)
+        await client.query(statement.statement.sql, statement.statement.params);
       await client.query('COMMIT');
     } catch (error) {
       await client.query('ROLLBACK');
@@ -76,12 +86,35 @@ class PostgresDatabase {
     const pending = this.clientPromise;
     this.clientPromise = null;
     if (!pending) return;
-    try { await (await pending).end(); } catch { /* connection already closed */ }
+    try {
+      await (await pending).end();
+    } catch {
+      /* connection already closed */
+    }
   }
 }
 
-const database = new PostgresDatabase();
+const requestDatabase = new AsyncLocalStorage<PostgresDatabase>();
 
-export function getDb(): PostgresDatabase { return database; }
-export async function closeDb(): Promise<void> { await database.close(); }
+export function getDb(): PostgresDatabase {
+  const database = requestDatabase.getStore();
+  if (!database) throw new Error('Database access outside a request scope.');
+  return database;
+}
+
+export async function withRequestDb<T>(operation: () => Promise<T>): Promise<T> {
+  // Shared application functions can be called by another route handler in the
+  // same request. Reuse that request's client instead of opening a nested one.
+  if (requestDatabase.getStore()) return operation();
+
+  const database = new PostgresDatabase();
+  return requestDatabase.run(database, async () => {
+    try {
+      return await operation();
+    } finally {
+      await database.close();
+    }
+  });
+}
+
 export type { Prepared as PgPreparedStatement };
