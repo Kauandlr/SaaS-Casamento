@@ -13,8 +13,8 @@ export default async function ConfirmationPage({ params }: { params: Promise<{ s
     if (!wedding || !/^[A-Za-z0-9_-]{43}$/.test(token)) notFound();
     const formattedDate = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long', timeZone: 'UTC' }).format(new Date(`${wedding.weddingDate}T12:00:00Z`));
     return (
-      <main className="min-h-dvh bg-background px-4 py-8 text-foreground sm:py-14">
-        <div className="mx-auto max-w-xl">
+      <main className="min-h-[100dvh] overflow-x-hidden bg-background px-4 py-8 text-foreground sm:py-14">
+        <div className="mx-auto w-full min-w-0 max-w-xl">
           <header className="mb-8 border-b border-border pb-7 text-center">
             <p className="text-sm font-medium text-primary">{wedding.coupleName}</p>
             <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">

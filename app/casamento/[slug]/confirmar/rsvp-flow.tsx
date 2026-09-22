@@ -19,7 +19,7 @@ function formattedDate(value: string) {
 function ProgressSteps({ step }: { step: Step }) {
   const active = step === 'identify' ? 0 : step === 'people' ? 1 : 2;
   return (
-    <ol className="grid grid-cols-3 border-b border-border pb-5 text-xs" aria-label="Progresso da confirmação">
+    <ol className="grid min-w-0 grid-cols-3 border-b border-border pb-5 text-[11px] sm:text-xs" aria-label="Progresso da confirmação">
       {['Identificação', 'Pessoas', 'Concluído'].map((label, index) => (
         <li key={label} className={`relative text-center ${index <= active ? 'font-medium text-primary' : 'text-muted-foreground'}`} aria-current={index === active ? 'step' : undefined}>
           <span className={`mx-auto mb-2 grid size-7 place-items-center rounded-full border ${index <= active ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-background'}`}>{index + 1}</span>
@@ -154,7 +154,7 @@ export function RsvpFlow({
   if (restoring) return <div className="space-y-4 py-8" aria-label="Carregando confirmação"><Skeleton className="h-8 w-3/4" /><Skeleton className="h-24 w-full" /><Skeleton className="h-12 w-full" /></div>;
 
   return (
-    <div>
+    <div className="min-w-0">
       <ProgressSteps step={step} />
       {step === 'identify' && identification === 'name' && (
         <form onSubmit={lookup} className="space-y-6 py-7">

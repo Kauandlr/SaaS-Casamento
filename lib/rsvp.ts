@@ -63,6 +63,7 @@ export async function fingerprint(value: string) {
 }
 
 function string(value: unknown) {
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
   return value == null ? '' : String(value);
 }
 
