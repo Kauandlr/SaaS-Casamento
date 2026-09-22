@@ -145,13 +145,27 @@ const householdCategorySchema = z.object({
   name: z.string().trim().min(2).max(60),
 });
 
+const giftListItemSchema = idSchema.extend({
+  name: z.string().trim().min(2).max(120),
+  categoryId: z.uuid().nullable(),
+  desiredQuantity: z.number().int().positive().max(999),
+  estimatedUnitCents: z.number().int().nonnegative().max(100_000_000),
+  productUrl: linkUrlSchema,
+  notes: z.string().trim().max(800).default(''),
+});
+
 const paletteSchema = z.object({
+  id: z.string().min(1).max(64),
   name: z.string().trim().min(2).max(80),
   colors: z.array(z.object({
     name: z.string().trim().min(2).max(40),
     hex: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   })).min(2).max(8),
 });
+const palettesSchema = z.array(paletteSchema).max(20).refine(
+  (palettes) => new Set(palettes.map((palette) => palette.id)).size === palettes.length,
+  'Cada paleta precisa ter um identificador único.',
+);
 
 const weddingDateSchema = z.object({
   weddingDate: z.iso.date(),
@@ -195,8 +209,8 @@ export async function POST(request: Request) {
         ]);
         break;
       }
-      case 'save_wedding_palette': {
-        const payload = paletteSchema.parse(body.payload);
+      case 'save_wedding_palettes': {
+        const payload = palettesSchema.parse(body.payload);
         await db()
           .prepare('UPDATE weddings SET palette = ?::jsonb, updated_at = ? WHERE id = ?')
           .bind(JSON.stringify(payload), createdAt, weddingId)
@@ -524,6 +538,44 @@ export async function POST(request: Request) {
         ]);
         break;
       }
+      case 'update_gift_list_item': {
+        const payload = giftListItemSchema.parse(body.payload);
+        const item = await db()
+          .prepare('SELECT acquired_quantity, gift_intent FROM household_items WHERE id = ? AND wedding_id = ?')
+          .bind(payload.id, weddingId)
+          .first<Record<string, unknown>>();
+        if (!item || !['lista de presentes', 'ambos'].includes(String(item.gift_intent)))
+          return NextResponse.json({ error: 'Presente não encontrado na lista.' }, { status: 404 });
+        if (payload.desiredQuantity < Number(item.acquired_quantity ?? 0))
+          return NextResponse.json({ error: 'A quantidade não pode ser menor que a já recebida.' }, { status: 422 });
+        if (payload.categoryId) {
+          const category = await db()
+            .prepare('SELECT id FROM household_categories WHERE id = ? AND wedding_id = ?')
+            .bind(payload.categoryId, weddingId)
+            .first();
+          if (!category)
+            return NextResponse.json({ error: 'Categoria não encontrada.' }, { status: 404 });
+        }
+        await db()
+          .prepare(`UPDATE household_items SET name = ?, category_id = ?, desired_quantity = ?, estimated_unit_cents = ?, max_price_cents = ?, product_url = ?, notes = ?, updated_at = ? WHERE id = ? AND wedding_id = ?`)
+          .bind(payload.name, payload.categoryId, payload.desiredQuantity, payload.estimatedUnitCents, payload.estimatedUnitCents, payload.productUrl, payload.notes, createdAt, payload.id, weddingId)
+          .run();
+        break;
+      }
+      case 'remove_gift_list_item': {
+        const payload = idSchema.parse(body.payload);
+        const item = await db()
+          .prepare('SELECT gift_intent FROM household_items WHERE id = ? AND wedding_id = ?')
+          .bind(payload.id, weddingId)
+          .first<Record<string, unknown>>();
+        if (!item || !['lista de presentes', 'ambos'].includes(String(item.gift_intent)))
+          return NextResponse.json({ error: 'Presente não encontrado na lista.' }, { status: 404 });
+        await db()
+          .prepare('UPDATE household_items SET gift_intent = ?, updated_at = ? WHERE id = ? AND wedding_id = ?')
+          .bind(item.gift_intent === 'ambos' ? 'comprar' : 'a decidir', createdAt, payload.id, weddingId)
+          .run();
+        break;
+      }
       case 'record_household_purchase': {
         const payload = householdPurchaseSchema.parse(body.payload);
         const item = await db()
@@ -641,6 +693,8 @@ export async function POST(request: Request) {
             { error: 'Item não encontrado.' },
             { status: 404 },
           );
+        if (Number(item.acquired_quantity ?? 0) + payload.quantity > Number(item.desired_quantity ?? 0))
+          return NextResponse.json({ error: 'A quantidade supera o que ainda falta receber.' }, { status: 422 });
         const giftId = id();
         const nextQuantity =
           Number(item.acquired_quantity ?? 0) + payload.quantity;

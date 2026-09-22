@@ -20,7 +20,7 @@ export function LoginForm() {
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ email: form.get('email'), password: form.get('password') }),
+        body: JSON.stringify({ email: form.get('email'), password: form.get('password'), rememberLogin: form.has('rememberLogin') }),
       });
       const body = (await response.json()) as { error?: string };
       if (!response.ok) {
@@ -72,6 +72,10 @@ export function LoginForm() {
             </div>
             {capsLock && <p className="text-sm text-muted-foreground" role="status">Caps Lock está ativado.</p>}
           </div>
+          <label className="flex cursor-pointer items-center gap-2 text-sm">
+            <input type="checkbox" name="rememberLogin" className="size-4 accent-primary" />
+            Lembrar login por 30 dias
+          </label>
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
           <Button className="w-full" type="submit" disabled={pending}>{pending ? 'Entrando…' : 'Entrar'}</Button>
         </form>

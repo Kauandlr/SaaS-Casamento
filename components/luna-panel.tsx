@@ -1,7 +1,10 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import {
+  ArrowDown,
   Check,
   CheckCircle,
   ClockCounterClockwise,
@@ -32,6 +35,12 @@ type Conversation = {
   updatedAt: string;
 };
 
+function formatAssistantMessage(content: string) {
+  // Older replies sometimes put an entire numbered list on one line.
+  if (!/(?:^|\s)1\.\s+\S/.test(content) || !/(?:^|\s)2\.\s+\S/.test(content)) return content;
+  return content.replace(/[ \t]+([1-9]\d?)\.[ \t]+/g, (_, number: string) => `${number === '1' ? '\n\n' : '\n'}${number}. `);
+}
+
 export function LunaPanel({
   open,
   onClose,
@@ -46,59 +55,112 @@ export function LunaPanel({
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState(false);
+  const [historyRequest, setHistoryRequest] = useState(0);
+  const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [processing, setProcessing] = useState<string>();
   const [showHistory, setShowHistory] = useState(false);
-  const endRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollToLatestRef = useRef(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  function updateJumpToLatest() {
+    const scroller = scrollRef.current;
+    if (!scroller) return;
+    setShowJumpToLatest(scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight > 80);
+  }
+
+  function isNearLatest() {
+    const scroller = scrollRef.current;
+    return !scroller || scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <= 80;
+  }
+
+  function jumpToLatest() {
+    const scroller = scrollRef.current;
+    if (!scroller) return;
+    scroller.scrollTo({
+      top: scroller.scrollHeight,
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+    });
+  }
 
   useEffect(() => {
     if (!open) return;
     let active = true;
+    setHistoryLoading(true);
+    setHistoryError(false);
     void fetch('/api/ai/chat')
-      .then(async (response) => (response.ok ? response.json() as Promise<{ conversationId: string; conversations?: Conversation[]; messages: Message[]; pendingProposals: LunaProposal[] }> : null))
-      .then((result: { conversationId: string; conversations?: Conversation[]; messages: Message[]; pendingProposals: LunaProposal[] } | null) => {
-        if (!active || !result) return;
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Não foi possível carregar a conversa.');
+        return response.json() as Promise<{ conversationId: string; conversations?: Conversation[]; messages: Message[]; pendingProposals: LunaProposal[] }>;
+      })
+      .then((result) => {
+        if (!active) return;
         setConversationId(result.conversationId);
         setConversations(result.conversations ?? []);
         const restored = (result.messages ?? []) as Message[];
         const pending = (result.pendingProposals ?? []) as LunaProposal[];
+        scrollToLatestRef.current = true;
         setMessages(pending.length
           ? [...restored, { id: `pending-${Date.now()}`, role: 'assistant', content: 'Estas propostas ainda aguardam confirmação:', proposals: pending }]
           : restored);
+        setHistoryLoading(false);
       })
-      .catch(() => undefined);
-    return () => { active = false; };
-  }, [open]);
+      .catch(() => {
+        if (!active) return;
+        setHistoryError(true);
+        setHistoryLoading(false);
+      });
+    return () => { active = false; setHistoryLoading(true); };
+  }, [open, historyRequest]);
 
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, loading]);
+  useLayoutEffect(() => {
+    if (!open || historyLoading) return;
+    const scroller = scrollRef.current;
+    if (scroller && scrollToLatestRef.current) {
+      scroller.scrollTop = scroller.scrollHeight;
+      scrollToLatestRef.current = false;
+    }
+    updateJumpToLatest();
+  }, [open, historyLoading, messages, loading]);
 
   async function restoreConversation(requestedId: string) {
-    const response = await fetch(`/api/ai/chat?conversationId=${encodeURIComponent(requestedId)}`);
-    if (!response.ok) return;
-    const result = await response.json() as { conversationId: string; conversations?: Conversation[]; messages: Message[]; pendingProposals: LunaProposal[] };
-    setConversationId(result.conversationId);
-    setConversations(result.conversations ?? []);
-    const restored = result.messages ?? [];
-    const pending = result.pendingProposals ?? [];
-    setMessages(pending.length
-      ? [...restored, { id: `pending-${Date.now()}`, role: 'assistant', content: 'Propostas pendentes:', proposals: pending }]
-      : restored);
-    setShowHistory(false);
+    setHistoryLoading(true);
+    setHistoryError(false);
+    try {
+      const response = await fetch(`/api/ai/chat?conversationId=${encodeURIComponent(requestedId)}`);
+      if (!response.ok) throw new Error('Não foi possível carregar a conversa.');
+      const result = await response.json() as { conversationId: string; conversations?: Conversation[]; messages: Message[]; pendingProposals: LunaProposal[] };
+      setConversationId(result.conversationId);
+      setConversations(result.conversations ?? []);
+      const restored = result.messages ?? [];
+      const pending = result.pendingProposals ?? [];
+      scrollToLatestRef.current = true;
+      setMessages(pending.length
+        ? [...restored, { id: `pending-${Date.now()}`, role: 'assistant', content: 'Propostas pendentes:', proposals: pending }]
+        : restored);
+      setShowHistory(false);
+    } catch {
+      setHistoryError(true);
+    } finally {
+      setHistoryLoading(false);
+    }
   }
 
   function startNewConversation() {
     setConversationId(undefined);
     setMessages([]);
+    setHistoryError(false);
     setDraft('');
     setShowHistory(false);
   }
 
   async function send() {
     const message = draft.trim();
-    if (!message || loading) return;
+    if (!message || loading || historyLoading || historyError) return;
     setDraft('');
+    scrollToLatestRef.current = true;
     setMessages((current) => [...current, { id: `user-${Date.now()}`, role: 'user', content: message }]);
     setLoading(true);
     try {
@@ -111,8 +173,10 @@ export function LunaPanel({
       if (!response.ok || !result.message) throw new Error(result.error ?? 'A Luna não respondeu.');
       setConversationId(result.conversationId);
       setConversations(result.conversations ?? []);
+      scrollToLatestRef.current = isNearLatest();
       setMessages((current) => [...current, { ...result.message!, proposals: result.proposals }]);
     } catch (error) {
+      scrollToLatestRef.current = isNearLatest();
       setMessages((current) => [...current, { id: `error-${Date.now()}`, role: 'assistant', content: error instanceof Error ? error.message : 'A Luna não respondeu agora.' }]);
     } finally {
       setLoading(false);
@@ -152,11 +216,11 @@ export function LunaPanel({
             <div><p className="font-semibold tracking-[-0.02em]">Luna 5.6</p><p className="text-xs text-muted-foreground">Sua copilota do casamento</p></div>
           </div>
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" onClick={() => setShowHistory((visible) => !visible)} aria-label="Histórico de chats" aria-pressed={showHistory}><ClockCounterClockwise size={20} /></Button>
+            <Button variant="ghost" size="icon" onClick={() => setShowHistory((visible) => !visible)} disabled={historyLoading} aria-label="Histórico de chats" aria-pressed={showHistory}><ClockCounterClockwise size={20} /></Button>
             <Button variant="ghost" size="icon" onClick={onClose} aria-label="Fechar Luna"><X size={20} /></Button>
           </div>
         </header>
-        {showHistory && (
+        {showHistory && !historyLoading && (
           <div className="border-b border-border bg-card px-4 py-4 sm:px-5">
             <div className="flex items-center justify-between gap-3">
               <p className="text-sm font-semibold">Histórico de chats</p>
@@ -177,29 +241,55 @@ export function LunaPanel({
             </div>
           </div>
         )}
-        <div className="flex-1 space-y-5 overflow-y-auto px-4 py-5 sm:px-5">
-          {messages.length === 0 && (
-            <div className="rounded-3xl bg-secondary p-5">
-              <div className="flex items-center gap-2 text-sm font-semibold"><Sparkle size={16} weight="fill" /> Como posso ajudar?</div>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">Peça para cadastrar convidados, fornecedores, pagamentos, tarefas ou itens do enxoval. Eu preparo tudo para sua confirmação.</p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {['Cadastre um fornecedor', 'Adicione uma tarefa', 'Como está o orçamento?'].map((suggestion) => <button key={suggestion} className="rounded-full border border-border bg-background px-3 py-2 text-xs transition-colors hover:bg-accent" onClick={() => { setDraft(suggestion); inputRef.current?.focus(); }}>{suggestion}</button>)}
+        <div className="relative min-h-0 flex-1">
+          <div ref={scrollRef} onScroll={updateJumpToLatest} className="h-full space-y-5 overflow-y-auto px-4 py-5 sm:px-5">
+            {historyLoading ? (
+              <div role="status" aria-label="Carregando conversa" className="space-y-5 motion-safe:animate-pulse">
+                <div className="ml-auto h-16 w-3/4 rounded-2xl bg-muted" />
+                <div className="h-24 w-4/5 rounded-2xl bg-muted" />
+                <div className="ml-auto h-12 w-2/3 rounded-2xl bg-muted" />
+                <span className="sr-only">Carregando conversa...</span>
               </div>
-            </div>
+            ) : historyError ? (
+              <div className="rounded-2xl border border-border bg-card p-5 text-sm">
+                <p>Não foi possível carregar a conversa.</p>
+                <Button size="sm" variant="outline" className="mt-3" onClick={() => setHistoryRequest((current) => current + 1)}>Tentar novamente</Button>
+              </div>
+            ) : <>
+              {messages.length === 0 && (
+                <div className="rounded-3xl bg-secondary p-5">
+                  <div className="flex items-center gap-2 text-sm font-semibold"><Sparkle size={16} weight="fill" /> Como posso ajudar?</div>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">Peça para cadastrar convidados, fornecedores, pagamentos, tarefas ou itens do enxoval. Eu preparo tudo para sua confirmação.</p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {['Cadastre um fornecedor', 'Adicione uma tarefa', 'Como está o orçamento?'].map((suggestion) => <button key={suggestion} className="rounded-full border border-border bg-background px-3 py-2 text-xs transition-colors hover:bg-accent" onClick={() => { setDraft(suggestion); inputRef.current?.focus(); }}>{suggestion}</button>)}
+                  </div>
+                </div>
+              )}
+              {messages.map((message) => (
+                <div key={message.id} className={message.role === 'user' ? 'ml-8' : 'mr-4'}>
+                  {message.role === 'user' ? (
+                    <div className="whitespace-pre-wrap rounded-2xl rounded-br-md bg-primary px-4 py-3 text-sm text-primary-foreground">{message.content}</div>
+                  ) : (
+                    <div className="rounded-2xl rounded-bl-md border border-border bg-card px-4 py-3 text-sm leading-6 [&_a]:underline [&_a]:underline-offset-2 [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_code]:break-all [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_li+li]:mt-1 [&_li]:pl-1 [&_ol]:mt-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_p+p]:mt-2 [&_pre]:overflow-x-auto [&_strong]:font-semibold [&_ul]:mt-2 [&_ul]:list-disc [&_ul]:pl-5">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{formatAssistantMessage(message.content)}</ReactMarkdown>
+                    </div>
+                  )}
+                  {message.proposals?.map((proposal) => <Proposal key={proposal.id} proposal={proposal} processing={processing === proposal.id} onDecide={decide} onEdit={() => { setDraft(`Quero editar a proposta “${proposal.title}”: `); inputRef.current?.focus(); }} />)}
+                </div>
+              ))}
+              {loading && <div className="mr-4 flex items-center gap-2 text-sm text-muted-foreground"><SpinnerGap className="animate-spin" size={18} /> A Luna está pensando…</div>}
+            </>}
+          </div>
+          {!historyLoading && !historyError && showJumpToLatest && (
+            <Button type="button" variant="secondary" size="sm" onClick={jumpToLatest} className="absolute bottom-4 right-5 gap-1.5 border border-border shadow-md" aria-label="Ir para o fim da conversa">
+              <ArrowDown size={16} /> Ir para o fim
+            </Button>
           )}
-          {messages.map((message) => (
-            <div key={message.id} className={message.role === 'user' ? 'ml-8' : 'mr-4'}>
-              <div className={message.role === 'user' ? 'rounded-2xl rounded-br-md bg-primary px-4 py-3 text-sm text-primary-foreground' : 'rounded-2xl rounded-bl-md border border-border bg-card px-4 py-3 text-sm leading-6'}>{message.content}</div>
-              {message.proposals?.map((proposal) => <Proposal key={proposal.id} proposal={proposal} processing={processing === proposal.id} onDecide={decide} onEdit={() => { setDraft(`Quero editar a proposta “${proposal.title}”: `); inputRef.current?.focus(); }} />)}
-            </div>
-          ))}
-          {loading && <div className="mr-4 flex items-center gap-2 text-sm text-muted-foreground"><SpinnerGap className="animate-spin" size={18} /> A Luna está pensando…</div>}
-          <div ref={endRef} />
         </div>
         <div className="border-t border-border bg-background p-4 sm:p-5">
           <div className="relative">
-            <Textarea ref={inputRef} value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send(); } }} placeholder="Ex.: cadastre Ana Souza como convidada…" className="min-h-[78px] resize-none pr-12" maxLength={4000} />
-            <Button size="icon" className="absolute bottom-2 right-2" onClick={() => void send()} disabled={!draft.trim() || loading} aria-label="Enviar mensagem"><PaperPlaneTilt size={17} weight="fill" /></Button>
+            <Textarea ref={inputRef} value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send(); } }} placeholder="Ex.: cadastre Ana Souza como convidada…" className="min-h-[78px] resize-none pr-12" maxLength={4000} disabled={historyLoading || historyError} />
+            <Button size="icon" className="absolute bottom-2 right-2" onClick={() => void send()} disabled={!draft.trim() || loading || historyLoading || historyError} aria-label="Enviar mensagem"><PaperPlaneTilt size={17} weight="fill" /></Button>
           </div>
           <p className="mt-2 text-center text-[11px] text-muted-foreground">A Luna sempre pede confirmação antes de salvar.</p>
         </div>

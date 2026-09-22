@@ -7,6 +7,10 @@ const geistMono = Geist_Mono({ variable: '--font-geist-mono', subsets: ['latin']
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://vinculo-wedding-os.kauandelara.chatgpt.site'),
+  icons: {
+    icon: [{ url: '/favicon.svg', type: 'image/svg+xml' }],
+    shortcut: '/favicon.svg',
+  },
   title: 'Vínculo — Wedding Planning OS',
   description: 'Planejamento financeiro, fornecedores, convidados e tarefas do casamento em um só lugar.',
   robots: { index: false, follow: false },

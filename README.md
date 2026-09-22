@@ -8,6 +8,7 @@ Wedding Planning OS privado para organizar o casamento com clareza financeira e 
 - Orçamento por categoria e agenda de pagamentos.
 - Cadastro e comparação inicial de fornecedores.
 - Lista de convidados com grupos e RSVP.
+- Lista de presentes integrada ao enxoval, com itens, links e registro do que foi recebido.
 - Checklist com prioridade, responsável, prazo e conclusão.
 - Login por conta configurada no ambiente, isolamento por casamento e persistência em PostgreSQL.
 - Layout responsivo, tema claro/escuro e ferramentas WebMCP para resumo e tarefas.

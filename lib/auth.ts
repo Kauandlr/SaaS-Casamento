@@ -7,6 +7,7 @@ export { isSameOrigin } from './request-origin';
 
 const SESSION_COOKIE = 'vinculo_session';
 const SESSION_DAYS = 7;
+const REMEMBERED_SESSION_DAYS = 30;
 const ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
 
@@ -41,7 +42,7 @@ function clientAddress(request: Request): string {
   return request.headers.get('cf-connecting-ip') ?? request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
 }
 
-export async function login(email: string, password: string, request: Request): Promise<{ ok: true; user: AuthUser; token: string } | { ok: false; status: 401 | 429 }> {
+export async function login(email: string, password: string, request: Request, rememberLogin = false): Promise<{ ok: true; user: AuthUser; token: string } | { ok: false; status: 401 | 429 }> {
   const account = config();
   const normalizedEmail = email.trim().toLowerCase();
   const fingerprint = await sha256(`${clientAddress(request)}:${normalizedEmail}`);
@@ -56,7 +57,8 @@ export async function login(email: string, password: string, request: Request): 
 
   const token = base64url(crypto.getRandomValues(new Uint8Array(32)));
   const tokenHash = await sha256(token);
-  const expiresAt = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const sessionDays = rememberLogin ? REMEMBERED_SESSION_DAYS : SESSION_DAYS;
+  const expiresAt = new Date(Date.now() + sessionDays * 24 * 60 * 60 * 1000).toISOString();
   await db().batch([
     db().prepare(`INSERT INTO users (id, email, display_name, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?)
@@ -95,13 +97,13 @@ function readSessionToken(header: string | null): string | null {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
-export async function setSessionCookie(token: string): Promise<void> {
+export async function setSessionCookie(token: string, rememberLogin = false): Promise<void> {
   (await cookies()).set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: 'lax',
     secure: (await headers()).get('x-forwarded-proto') === 'https',
     path: '/',
-    maxAge: SESSION_DAYS * 24 * 60 * 60,
+    ...(rememberLogin ? { maxAge: REMEMBERED_SESSION_DAYS * 24 * 60 * 60 } : {}),
   });
 }
 

@@ -12,6 +12,7 @@ import {
   CurrencyCircleDollar,
   EnvelopeSimple,
   Gauge,
+  Gift,
   HeartStraight,
   HouseLine,
   LinkSimple,
@@ -70,6 +71,7 @@ import {
   householdMetrics,
   type HouseholdAction,
 } from '@/components/household-view';
+import { GiftListView } from '@/components/gift-list-view';
 import type { WeddingSnapshot } from '@/lib/wedding-types';
 import { LunaPanel } from '@/components/luna-panel';
 import { PaletteView } from '@/components/palette-view';
@@ -78,6 +80,7 @@ type View =
   | 'overview'
   | 'finance'
   | 'household'
+  | 'gifts'
   | 'palette'
   | 'vendors'
   | 'guests'
@@ -91,7 +94,9 @@ type ActionName =
   | 'add_task'
   | 'toggle_task'
   | 'update_wedding_date'
-  | 'save_wedding_palette'
+  | 'save_wedding_palettes'
+  | 'update_gift_list_item'
+  | 'remove_gift_list_item'
   | HouseholdAction;
 
 const currency = new Intl.NumberFormat('pt-BR', {
@@ -118,7 +123,7 @@ const navItems = [
   {
     id: 'finance' as const,
     label: 'Financeiro',
-    mobile: 'Financeiro',
+    mobile: 'Finanças',
     icon: CurrencyCircleDollar,
   },
   {
@@ -126,6 +131,12 @@ const navItems = [
     label: 'Enxoval',
     mobile: 'Casa',
     icon: HouseLine,
+  },
+  {
+    id: 'gifts' as const,
+    label: 'Lista de presentes',
+    mobile: 'Presentes',
+    icon: Gift,
   },
   {
     id: 'palette' as const,
@@ -488,14 +499,10 @@ export function WeddingApp({
               <Button variant="ghost" size="icon" aria-label="Notificações">
                 <Bell size={19} />
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setLunaOpen(true)} className="gap-1.5 border-primary/30 text-primary">
-                <Sparkle size={16} weight="fill" />
-                <span className="hidden sm:inline">Luna 5.6</span>
-              </Button>
               <Button variant="outline" size="sm" onClick={logout}>
                 Sair
               </Button>
-              {view !== 'household' && view !== 'palette' && (
+              {view !== 'household' && view !== 'gifts' && view !== 'palette' && (
                 <Button
                   onClick={() => setDialogOpen(true)}
                   className="h-9 rounded-xl px-3"
@@ -534,6 +541,9 @@ export function WeddingApp({
                 onAction={performAction}
               />
             )}
+            {view === 'gifts' && (
+              <GiftListView data={data} search={search} onAction={performAction} />
+            )}
             {view === 'palette' && (
               <PaletteView data={data} onAction={performAction} />
             )}
@@ -568,7 +578,7 @@ export function WeddingApp({
 
           <nav
             aria-label="Navegação mobile"
-            className="fixed inset-x-0 bottom-0 z-30 grid h-[72px] grid-cols-6 border-t border-border bg-background/95 px-1 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden"
+            className="fixed inset-x-0 bottom-0 z-30 grid h-[72px] grid-cols-7 border-t border-border bg-background/95 px-1 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden"
           >
             {mobileNavItems.map(({ id, mobile, icon: Icon }) => (
               <button
@@ -583,6 +593,17 @@ export function WeddingApp({
           </nav>
         </section>
       </main>
+      {!lunaOpen && (
+        <Button
+          type="button"
+          onClick={() => setLunaOpen(true)}
+          aria-label="Abrir Luna"
+          className="fixed bottom-[88px] right-4 z-40 h-12 gap-2 rounded-full px-5 shadow-xl shadow-primary/20 motion-safe:hover:-translate-y-1 md:bottom-6 md:right-6"
+        >
+          <Sparkle size={20} weight="fill" />
+          <span>Luna 5.6</span>
+        </Button>
+      )}
       <LunaPanel open={lunaOpen} onClose={() => setLunaOpen(false)} onSnapshot={setData} />
       <WeddingDateDialog
         open={weddingDateDialogOpen}
@@ -598,7 +619,7 @@ export function WeddingApp({
           )
         }
       />
-      {view !== 'household' && view !== 'palette' && (
+      {view !== 'household' && view !== 'gifts' && view !== 'palette' && (
         <AddDialog
           view={view}
           open={dialogOpen}
@@ -695,6 +716,10 @@ function Overview({
     .filter((item) => item.status !== 'concluído')
     .slice(0, 2);
   const home = householdMetrics(data);
+  const savingsProgress =
+    metrics.safeTarget > 0
+      ? Math.min(100, (metrics.weddingSavings / metrics.safeTarget) * 100)
+      : 0;
   return (
     <>
       <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
@@ -758,20 +783,14 @@ function Overview({
                 {money(metrics.weddingSavings)} destinados ao casamento
               </span>
               <span>
-                {Math.min(
-                  100,
-                  Math.round(
-                    (metrics.weddingSavings / metrics.safeTarget) * 100,
-                  ),
-                )}
-                %
+                {Math.round(savingsProgress)}%
               </span>
             </div>
             <div className="h-2 overflow-hidden rounded-full bg-white/15">
               <div
                 className="h-full rounded-full bg-[#dce8d9]"
                 style={{
-                  width: `${Math.min(100, (metrics.weddingSavings / metrics.safeTarget) * 100)}%`,
+                  width: `${savingsProgress}%`,
                 }}
               />
             </div>
@@ -1458,7 +1477,7 @@ function AddDialog({
   onOpenChange: (value: boolean) => void;
   onSubmit: (action: ActionName, payload: unknown, success: string) => void;
 }) {
-  const kind = view === 'overview' || view === 'household' || view === 'palette' ? 'checklist' : view;
+  const kind = view === 'overview' || view === 'household' || view === 'gifts' || view === 'palette' ? 'checklist' : view;
   const titles = {
     finance: ['Novo pagamento', 'Registre um vencimento real.'],
     vendors: ['Novo fornecedor', 'Adicione uma proposta para comparar.'],

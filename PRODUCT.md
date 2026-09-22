@@ -13,7 +13,8 @@ Ao abrir o Vínculo, o casal entende rapidamente quanto tem, quanto deve, quanto
 1. Acompanhar a saúde financeira e registrar pagamentos.
 2. Organizar e comparar fornecedores.
 3. Gerir convidados, RSVP e tarefas prioritárias.
+4. Organizar a lista de presentes e registrar os itens recebidos.
 
 ## Fora da V1
 
-Uploads de contratos, planejador de mesas, página pública, importação de planilhas, lua de mel, lista de presentes e colaboração com permissões granulares permanecem na evolução do produto.
+Uploads de contratos, planejador de mesas, página pública, importação de planilhas, lua de mel e colaboração com permissões granulares permanecem na evolução do produto.

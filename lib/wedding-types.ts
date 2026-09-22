@@ -139,7 +139,7 @@ export type WeddingSnapshot = {
     monthlyCapacityCents: number;
     reservePercent: number;
     guestEstimate: number;
-    palette: WeddingPalette | null;
+    palettes: WeddingPalette[];
   };
   categories: BudgetCategory[];
   payments: Payment[];
@@ -157,6 +157,7 @@ export type WeddingSnapshot = {
 };
 
 export type WeddingPalette = {
+  id: string;
   name: string;
   colors: Array<{ name: string; hex: string }>;
 };
