@@ -465,7 +465,7 @@ export function WeddingApp({
           </div>
         </aside>
 
-        <section className="min-w-0 pb-24 md:pb-8">
+        <section className={`min-w-0 pb-24 ${view === 'guests' ? 'md:pb-0' : 'md:pb-8'}`}>
           <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-3 border-b border-border/70 bg-background/92 px-4 backdrop-blur-xl md:px-7">
             <div className="min-w-0">
               <p className="truncate text-xs text-muted-foreground">
@@ -514,7 +514,7 @@ export function WeddingApp({
             </div>
           </header>
 
-          <div className="mx-auto max-w-[1380px] px-4 py-6 md:px-7 md:py-8">
+          <div className={`mx-auto max-w-[1380px] px-4 py-6 md:px-7 md:py-8 ${view === 'guests' ? 'md:flex md:h-[calc(100dvh-4rem)] md:min-h-[30rem] md:flex-col' : ''}`}>
             {view === 'overview' && (
               <Overview
                 data={data}
@@ -1222,7 +1222,7 @@ function Guests({
         action="Novo convidado"
         onAction={onAdd}
       />
-      <div className="mb-4 grid grid-cols-3 gap-3">
+      <div className="mb-4 grid grid-cols-3 gap-3 md:shrink-0">
         <SmallMetric label="Confirmados" value={confirmed} />
         <SmallMetric
           label="Aguardando"
@@ -1230,12 +1230,12 @@ function Guests({
             data.guests.filter((item) => item.rsvp === 'aguardando').length
           }
         />
-        <SmallMetric label="Estimativa" value={data.wedding.guestEstimate} />
+        <SmallMetric label="Total cadastrados" value={data.guests.length} />
       </div>
-      <section className="rounded-[28px] border border-border bg-card p-3 sm:p-5">
+      <section className="rounded-[28px] border border-border bg-card p-3 sm:p-5 md:min-h-0 md:flex-1 md:overflow-hidden">
         {items.length ? (
-          <Table>
-            <TableHeader>
+          <Table containerClassName="md:h-full md:overflow-auto">
+            <TableHeader className="sticky top-0 z-10 bg-card">
               <TableRow>
                 <TableHead>Nome</TableHead>
                 <TableHead>Grupo</TableHead>
