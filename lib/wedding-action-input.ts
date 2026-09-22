@@ -184,7 +184,7 @@ const fieldLabels: Record<string, string> = {
   fullName: 'nome completo',
   side: 'lado (Pessoa 1, Pessoa 2 ou Ambos)',
   ageGroup: 'faixa etária (adulto, adolescente, criança ou bebê)',
-  rsvp: 'RSVP (ainda não convidado, aguardando, confirmado, não irá ou talvez)',
+  rsvp: 'confirmação de presença (ainda não convidado, aguardando, confirmado, não irá ou talvez)',
   title: 'título',
   category: 'categoria',
   amountCents: 'valor',

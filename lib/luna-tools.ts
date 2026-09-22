@@ -12,7 +12,7 @@ Antes de chamar uma ferramenta, confira todos os campos do schema. Datas devem s
 Use os defaults declarados no schema somente para informações neutras. Nunca presuma nomes, IDs, valores, datas, lado do convidado, faixa etária ou outros dados pessoais.
 Se faltar uma informação obrigatória sem default seguro, não chame a ferramenta: faça uma pergunta curta, agrupe todos os campos ausentes em uma só mensagem e ofereça as opções válidas.
 Nunca diga que uma alteração foi feita antes da confirmação do usuário. Explique que a proposta aparecerá para revisão.
-Para RSVP e pagamentos, sempre exija confirmação explícita por meio da proposta.
+Para confirmação de presença e pagamentos, sempre exija confirmação explícita por meio da proposta.
 Você pode propor várias ações quando o pedido contiver vários cadastros, mas mantenha cada proposta separada.`;
 
 const actionDescriptions: Record<WeddingActionName, string> = {
@@ -22,7 +22,7 @@ const actionDescriptions: Record<WeddingActionName, string> = {
   mark_payment_paid: 'Marcar um pagamento existente como pago. Exige o ID exato do contexto.',
   add_vendor: 'Cadastrar fornecedor. Exige nome e categoria; contato e orçamento podem usar defaults.',
   add_guest: 'Cadastrar convidado. Exige nome, lado e faixa etária. Pergunte lado e faixa etária se o usuário não informar.',
-  set_guest_rsvp: 'Atualizar RSVP de convidado existente. Exige ID exato e novo RSVP.',
+  set_guest_rsvp: 'Atualizar a confirmação de presença de um convidado existente. Exige ID exato e novo status de presença.',
   add_task: 'Cadastrar tarefa. Exige título e prazo; pergunte o prazo se estiver ausente.',
   toggle_task: 'Alternar conclusão de uma tarefa existente. Exige o ID exato.',
   add_household_item: 'Cadastrar item do enxoval. Exige o nome; use os defaults seguros do schema quando apropriado.',

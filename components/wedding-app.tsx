@@ -560,7 +560,7 @@ export function WeddingApp({
                 search={search}
                 onAdd={() => setDialogOpen(true)}
                 onRsvp={(id, rsvp) =>
-                  submit('set_guest_rsvp', { id, rsvp }, 'RSVP atualizado')
+                  submit('set_guest_rsvp', { id, rsvp }, 'Confirmação de presença atualizada')
                 }
               />
             )}
@@ -716,6 +716,47 @@ function Overview({
     .filter((item) => item.status !== 'concluído')
     .slice(0, 2);
   const home = householdMetrics(data);
+  const contractedVendors = data.vendors.filter(
+    (item) => item.status === 'contratado',
+  ).length;
+  const giftListItems = data.household.items.filter(
+    (item) =>
+      item.status !== 'removido da lista' &&
+      ['lista de presentes', 'ambos'].includes(item.giftIntent),
+  );
+  const receivedGifts = data.household.gifts
+    .filter((gift) => giftListItems.some((item) => item.id === gift.itemId))
+    .reduce((sum, gift) => sum + gift.quantity, 0);
+  const quickTotals = [
+    {
+      label: 'Convidados',
+      value: data.guests.length,
+      detail: `${metrics.confirmed} confirmados`,
+      view: 'guests' as const,
+      icon: UsersThree,
+    },
+    {
+      label: 'Fornecedores',
+      value: data.vendors.length,
+      detail: `${contractedVendors} contratados`,
+      view: 'vendors' as const,
+      icon: Storefront,
+    },
+    {
+      label: 'Tarefas pendentes',
+      value: metrics.openTasks,
+      detail: `de ${data.checklist.length} tarefas`,
+      view: 'checklist' as const,
+      icon: ClipboardText,
+    },
+    {
+      label: 'Presentes na lista',
+      value: giftListItems.length,
+      detail: `${receivedGifts} unidades recebidas`,
+      view: 'gifts' as const,
+      icon: Gift,
+    },
+  ];
   const savingsProgress =
     metrics.safeTarget > 0
       ? Math.min(100, (metrics.weddingSavings / metrics.safeTarget) * 100)
@@ -759,6 +800,28 @@ function Overview({
           />
           Saúde financeira: {onTrack ? 'boa' : 'atenção'}
         </Badge>
+      </div>
+      <div className="mt-7 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {quickTotals.map(({ label, value, detail, view, icon: Icon }) => (
+          <button
+            key={view}
+            type="button"
+            onClick={() => onNavigate(view)}
+            className="group flex min-w-0 flex-col rounded-2xl border border-border bg-card p-4 text-left transition-colors hover:border-primary/40 hover:bg-secondary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:p-5"
+          >
+            <div className="flex w-full items-center justify-between gap-2 text-muted-foreground">
+              <Icon size={18} aria-hidden="true" />
+              <CaretRight
+                size={15}
+                aria-hidden="true"
+                className="opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+              />
+            </div>
+            <p className="mt-4 font-mono text-3xl font-medium tabular-nums">{value}</p>
+            <p className="mt-1 text-sm font-medium">{label}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
+          </button>
+        ))}
       </div>
       <div className="mt-8 grid gap-4 lg:grid-cols-[1.35fr_.65fr]">
         <section className="overflow-hidden rounded-[28px] bg-primary p-5 text-primary-foreground shadow-[0_24px_60px_-36px_rgba(39,67,56,.72)] sm:p-7">
@@ -1106,6 +1169,12 @@ function Vendors({
       .toLowerCase()
       .includes(search.toLowerCase()),
   );
+  const negotiating = data.vendors.filter(
+    (item) => item.status === 'negociando',
+  ).length;
+  const contracted = data.vendors.filter(
+    (item) => item.status === 'contratado',
+  ).length;
   return (
     <>
       <PageHeading
@@ -1115,6 +1184,11 @@ function Vendors({
         action="Novo fornecedor"
         onAction={onAdd}
       />
+      <div className="mb-4 grid grid-cols-3 gap-3">
+        <SmallMetric label="Total cadastrados" value={data.vendors.length} />
+        <SmallMetric label="Em negociação" value={negotiating} />
+        <SmallMetric label="Contratados" value={contracted} />
+      </div>
       {items.length ? (
         <div className="grid gap-4 lg:grid-cols-2">
           {items.map((item) => (
@@ -1241,7 +1315,7 @@ function Guests({
                 <TableHead>Grupo</TableHead>
                 <TableHead>Lado</TableHead>
                 <TableHead>Faixa</TableHead>
-                <TableHead className="text-right">RSVP</TableHead>
+                <TableHead className="text-right">Confirmação de presença</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -1750,7 +1824,7 @@ function AddDialog({
                 </label>
               </div>
               <label className={label}>
-                RSVP
+                Confirmação de presença
                 <NativeSelect name="rsvp" className="w-full">
                   <NativeSelectOption value="ainda não convidado">
                     Ainda não convidado
