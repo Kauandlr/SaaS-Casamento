@@ -98,12 +98,16 @@ export async function ensureGuestInvitationGroups(weddingId: string) {
 
 export async function getGuestInvitations(weddingId: string): Promise<GuestInvitation[]> {
   const result = await db().prepare(`SELECT id, name, type, responsible_name, responsible_phone,
-      family_name, custom_salutation, additional_guest_limit, public_token, last_shared_at
+      family_name, custom_salutation, additional_guest_limit, public_token, last_shared_at,
+      last_response_at, rsvp_note
     FROM guest_invitation_groups WHERE wedding_id = ?
       AND EXISTS (SELECT 1 FROM guests WHERE guests.invitation_group_id = guest_invitation_groups.id)
     ORDER BY name`).bind(weddingId).all<Row>();
   const guests = await db().prepare('SELECT id, invitation_group_id FROM guests WHERE wedding_id = ?')
     .bind(weddingId).all<Row>();
+  const companions = await db().prepare(`SELECT c.id, c.invitation_group_id, c.name, c.age_group
+    FROM invitation_companions c JOIN guest_invitation_groups i ON i.id = c.invitation_group_id
+    WHERE i.wedding_id = ?`).bind(weddingId).all<Row>();
   return result.results.map((row) => ({
     id: String(row.id),
     name: String(row.name),
@@ -115,23 +119,14 @@ export async function getGuestInvitations(weddingId: string): Promise<GuestInvit
     additionalGuestLimit: Number(row.additional_guest_limit ?? 0),
     token: String(row.public_token),
     lastSharedAt: row.last_shared_at ? new Date(row.last_shared_at as string | Date).toISOString() : null,
+    lastResponseAt: row.last_response_at ? new Date(row.last_response_at as string | Date).toISOString() : null,
+    rsvpNote: String(row.rsvp_note ?? ''),
     guestIds: guests.results.filter((guest) => guest.invitation_group_id === row.id).map((guest) => String(guest.id)),
+    companions: companions.results.filter((companion) => companion.invitation_group_id === row.id).map((companion) => ({
+      id: String(companion.id), name: String(companion.name), ageGroup: String(companion.age_group),
+    })),
   }));
 }
-
-export type PublicInvitation = {
-  id: string;
-  weddingId: string;
-  weddingTitle: string;
-  coupleName: string;
-  weddingDate: string;
-  city: string;
-  name: string;
-  type: InvitationKind;
-  additionalGuestLimit: number;
-  guests: Array<{ id: string; fullName: string; ageGroup: string; rsvp: string }>;
-  companions: Array<{ id: string; name: string; ageGroup: string }>;
-};
 
 export async function getPublicWedding(slug: string) {
   if (!/^[a-z0-9-]{3,80}$/.test(slug)) return null;
@@ -147,33 +142,3 @@ export async function getPublicWedding(slug: string) {
   };
 }
 
-export async function getPublicInvitation(slug: string, token: string): Promise<PublicInvitation | null> {
-  if (!/^[a-z0-9-]{3,80}$/.test(slug) || !/^[A-Za-z0-9_-]{43}$/.test(token)) return null;
-  const invitation = await db().prepare(`SELECT i.id, i.wedding_id, i.name, i.type, i.additional_guest_limit,
-      w.title, w.person_one, w.person_two, w.wedding_date, w.city
-    FROM guest_invitation_groups i JOIN weddings w ON w.id = i.wedding_id
-    WHERE w.public_slug = ? AND i.public_token = ? LIMIT 1`).bind(slug, token).first<Row>();
-  if (!invitation) return null;
-  const guests = await db().prepare(`SELECT id, full_name, age_group, rsvp FROM guests
-    WHERE invitation_group_id = ? ORDER BY created_at, full_name`).bind(invitation.id).all<Row>();
-  const companions = await db().prepare(`SELECT id, name, age_group FROM invitation_companions
-    WHERE invitation_group_id = ? ORDER BY created_at`).bind(invitation.id).all<Row>();
-  return {
-    id: String(invitation.id),
-    weddingId: String(invitation.wedding_id),
-    weddingTitle: String(invitation.title),
-    coupleName: `${invitation.person_one} & ${invitation.person_two}`,
-    weddingDate: String(invitation.wedding_date),
-    city: String(invitation.city),
-    name: String(invitation.name),
-    type: String(invitation.type) as InvitationKind,
-    additionalGuestLimit: Number(invitation.additional_guest_limit ?? 0),
-    guests: guests.results.map((guest) => ({
-      id: String(guest.id), fullName: String(guest.full_name),
-      ageGroup: String(guest.age_group), rsvp: String(guest.rsvp),
-    })),
-    companions: companions.results.map((companion) => ({
-      id: String(companion.id), name: String(companion.name), ageGroup: String(companion.age_group),
-    })),
-  };
-}

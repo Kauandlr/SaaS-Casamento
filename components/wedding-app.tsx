@@ -67,6 +67,7 @@ import {
   NativeSelectOption,
 } from '@/components/ui/native-select';
 import { Progress } from '@/components/ui/progress';
+import { Switch } from '@/components/ui/switch';
 import { Toaster, toast } from '@/components/ui/toast';
 import {
   HouseholdView,
@@ -78,6 +79,7 @@ import type { Guest, GuestInvitation, WeddingSnapshot } from '@/lib/wedding-type
 import { LunaPanel } from '@/components/luna-panel';
 import { PaletteView } from '@/components/palette-view';
 import { WhatsAppShareDialog } from '@/components/whatsapp-share-dialog';
+import { confirmedAgeTotals, invitationRsvpStatus, type InvitationRsvpStatus } from '@/lib/rsvp-rules';
 
 type View =
   | 'overview'
@@ -100,6 +102,7 @@ type ActionName =
   | 'add_task'
   | 'toggle_task'
   | 'update_wedding_date'
+  | 'save_rsvp_settings'
   | 'save_wedding_palettes'
   | 'update_gift_list_item'
   | 'remove_gift_list_item'
@@ -594,7 +597,12 @@ export function WeddingApp({
               />
             )}
             {view === 'settings' && (
-              <Settings data={data} onShare={() => setGeneralShareOpen(true)} />
+              <Settings
+                data={data}
+                saving={saving}
+                onShare={() => setGeneralShareOpen(true)}
+                onSave={(payload) => submit('save_rsvp_settings', payload, 'Configurações de confirmação atualizadas')}
+              />
             )}
           </div>
 
@@ -1331,23 +1339,29 @@ function Guests({
   onShare: (invitation: GuestInvitation) => void;
 }) {
   const [roleFilter, setRoleFilter] = useState<GuestRoleFilter>('all');
+  const [rsvpFilter, setRsvpFilter] = useState<'all' | InvitationRsvpStatus>('all');
   const normalizedSearch = search.toLocaleLowerCase('pt-BR');
-  const items = data.guestInvitations.map((invitation) => ({
-    invitation,
-    members: data.guests.filter((guest) => invitation.guestIds.includes(guest.id)),
-  })).filter(({ invitation, members }) => {
+  const allItems = data.guestInvitations.map((invitation) => {
+    const members = data.guests.filter((guest) => invitation.guestIds.includes(guest.id));
+    return { invitation, members, status: invitationRsvpStatus(members.map((member) => member.rsvp), invitation.companions.length) };
+  });
+  const items = allItems.filter(({ invitation, members, status }) => {
     const matchesSearch =
       `${invitation.name} ${invitation.responsiblePhone} ${members.map((member) => member.fullName).join(' ')}`
         .toLocaleLowerCase('pt-BR')
         .includes(normalizedSearch);
     const matchesRole = roleFilter === 'all'
       || members.some((member) => member.role === roleFilter);
-
-    return matchesSearch && matchesRole;
+    return matchesSearch && matchesRole && (rsvpFilter === 'all' || status === rsvpFilter);
   });
-  const confirmed = data.guests.filter(
-    (item) => item.rsvp === 'confirmado',
-  ).length;
+  const confirmed = data.guests.filter((item) => item.rsvp === 'confirmado').length
+    + data.guestInvitations.reduce((sum, invitation) => sum + invitation.companions.length, 0);
+  const declined = data.guests.filter((item) => item.rsvp === 'não irá').length;
+  const pendingResponses = data.guests.length - data.guests.filter((item) => ['confirmado', 'não irá'].includes(item.rsvp)).length;
+  const ages = confirmedAgeTotals([
+    ...data.guests.map((guest) => ({ ageGroup: guest.ageGroup, rsvp: guest.rsvp })),
+    ...data.guestInvitations.flatMap((invitation) => invitation.companions.map((companion) => ({ ageGroup: companion.ageGroup, rsvp: 'confirmado' }))),
+  ]);
   const roleMetrics: Array<{
     value: GuestRoleFilter;
     label: string;
@@ -1374,7 +1388,7 @@ function Guests({
     <>
       <PageHeading
         title="Convidados"
-        subtitle={`${confirmed} confirmados de ${data.guests.length} cadastrados.`}
+        subtitle={`${confirmed} confirmados · ${declined} recusados · ${pendingResponses} pendentes.`}
         icon={UsersThree}
         action="Novo convidado"
         onAction={onAdd}
@@ -1394,24 +1408,30 @@ function Guests({
           />
         ))}
       </div>
+      <div className="mb-4 grid grid-cols-2 divide-x divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card lg:grid-cols-4 lg:divide-y-0">
+        {[['Confirmados', confirmed], ['Recusados', declined], ['Adultos confirmados', ages.adults], ['Crianças confirmadas', ages.children]].map(([label, value]) => <div key={String(label)} className="p-4"><p className="font-mono text-2xl font-semibold">{value}</p><p className="mt-1 text-xs text-muted-foreground">{label}</p></div>)}
+      </div>
+      <label className="mb-4 grid max-w-xs gap-2 text-sm font-medium">Situação do convite
+        <NativeSelect value={rsvpFilter} onValueChange={(value) => setRsvpFilter((value ?? 'all') as typeof rsvpFilter)}>
+          <NativeSelectOption value="all">Todas</NativeSelectOption>
+          <NativeSelectOption value="pendente">Pendente</NativeSelectOption>
+          <NativeSelectOption value="parcial">Parcial</NativeSelectOption>
+          <NativeSelectOption value="confirmado">Confirmado</NativeSelectOption>
+          <NativeSelectOption value="recusado">Recusado</NativeSelectOption>
+        </NativeSelect>
+      </label>
       <section className="overflow-hidden rounded-2xl border border-border bg-card">
         {items.length ? (
           <div className="divide-y divide-border">
-            {items.map(({ invitation, members }) => {
+            {items.map(({ invitation, members, status }) => {
               const confirmedCount = members.filter((member) => member.rsvp === 'confirmado').length;
               const declinedCount = members.filter((member) => member.rsvp === 'não irá').length;
-              const status = confirmedCount === members.length
-                ? 'Confirmado'
-                : declinedCount === members.length
-                  ? 'Recusado'
-                  : confirmedCount || declinedCount
-                    ? 'Parcialmente confirmado'
-                    : 'Aguardando confirmação';
-              const statusTone = status === 'Confirmado'
+              const statusLabel = { pendente: 'Pendente', parcial: 'Parcial', confirmado: 'Confirmado', recusado: 'Recusado' }[status];
+              const statusTone = status === 'confirmado'
                 ? 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200'
-                : status === 'Recusado'
+                : status === 'recusado'
                   ? 'bg-rose-100 text-rose-900 dark:bg-rose-950 dark:text-rose-200'
-                  : status === 'Parcialmente confirmado'
+                  : status === 'parcial'
                     ? 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200'
                     : 'bg-muted text-muted-foreground';
               return (
@@ -1420,13 +1440,14 @@ function Guests({
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="font-semibold">{invitation.name}</h3>
-                        <Badge className={statusTone}>{status}</Badge>
+                        <Badge className={statusTone}>{statusLabel}</Badge>
                       </div>
                       <p className="mt-1 max-w-[85ch] text-pretty text-sm leading-6 text-muted-foreground">{members.map((member) => member.fullName).join(', ')}</p>
                       <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                         <span>{members.length} {members.length === 1 ? 'pessoa' : 'pessoas'}</span>
+                        <span>{confirmedCount + invitation.companions.length} confirmados · {declinedCount} não irão</span>
                         <span>{invitation.responsiblePhone || 'WhatsApp não informado'}</span>
-                        <span>{invitation.lastSharedAt ? `Última abertura: ${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(invitation.lastSharedAt))}` : 'WhatsApp ainda não aberto'}</span>
+                        <span>{invitation.lastResponseAt ? `Respondido em ${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(invitation.lastResponseAt))}` : 'Ainda sem resposta'}</span>
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 lg:justify-end">
@@ -1461,15 +1482,17 @@ function Guests({
                         <label key={member.id} className="flex items-center justify-between gap-3 text-sm">
                           <span className="truncate">{member.fullName}</span>
                           <NativeSelect className="w-[142px]" size="sm" value={member.rsvp} onValueChange={(value) => onRsvp(member.id, value ?? member.rsvp)}>
-                            <NativeSelectOption value="ainda não convidado">Não convidado</NativeSelectOption>
-                            <NativeSelectOption value="aguardando">Aguardando</NativeSelectOption>
+                            {!['pendente', 'confirmado', 'não irá'].includes(member.rsvp) && <NativeSelectOption value={member.rsvp}>Pendente</NativeSelectOption>}
+                            <NativeSelectOption value="pendente">Pendente</NativeSelectOption>
                             <NativeSelectOption value="confirmado">Confirmado</NativeSelectOption>
                             <NativeSelectOption value="não irá">Não irá</NativeSelectOption>
-                            <NativeSelectOption value="talvez">Talvez</NativeSelectOption>
                           </NativeSelect>
                         </label>
                       ))}
+                      {invitation.companions.map((companion) => <div key={companion.id} className="flex items-center justify-between gap-3 text-sm"><span className="truncate">{companion.name}</span><Badge variant="secondary">Acompanhante confirmado</Badge></div>)}
                     </div>
+                    {invitation.rsvpNote && <p className="mt-4 rounded-xl bg-secondary/60 p-3 text-sm"><span className="font-medium">Observação:</span> {invitation.rsvpNote}</p>}
+                    <InvitationHistory invitationId={invitation.id} />
                   </details>
                 </article>
               );
@@ -1483,8 +1506,26 @@ function Guests({
   );
 }
 
-function Settings({ data, onShare }: { data: WeddingSnapshot; onShare: () => void }) {
+function Settings({ data, saving, onShare, onSave }: {
+  data: WeddingSnapshot;
+  saving: boolean;
+  onShare: () => void;
+  onSave: (payload: unknown) => void;
+}) {
   const publicPath = `/casamento/${data.wedding.publicSlug}`;
+  const [showVenue, setShowVenue] = useState(data.wedding.showVenueAfterRsvp);
+  useEffect(() => setShowVenue(data.wedding.showVenueAfterRsvp), [data.wedding.showVenueAfterRsvp]);
+  function submitSettings(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    onSave({
+      rsvpDeadline: form.get('rsvpDeadline') || null,
+      showVenueAfterRsvp: showVenue,
+      venueName: form.get('venueName'),
+      venueAddress: form.get('venueAddress'),
+      venueMapsUrl: form.get('venueMapsUrl'),
+    });
+  }
   return (
     <>
       <PageHeading
@@ -1513,8 +1554,41 @@ function Settings({ data, onShare }: { data: WeddingSnapshot; onShare: () => voi
           <p className="mt-1 text-sm leading-6 text-muted-foreground">O Vínculo registra apenas que o WhatsApp foi aberto. A plataforma nunca marca uma mensagem como enviada.</p>
         </div>
       </section>
+      <form onSubmit={submitSettings} className="mt-5 max-w-3xl rounded-2xl border border-border bg-card p-5 sm:p-7">
+        <div>
+          <h2 className="font-semibold">Confirmação de presença</h2>
+          <p className="mt-1 text-sm leading-6 text-muted-foreground">Defina até quando convidados podem responder e quais dados de local aparecem após a confirmação.</p>
+        </div>
+        <div className="mt-6 grid gap-5">
+          <label className="grid gap-2 text-sm font-medium">Data-limite<Input className="h-11" name="rsvpDeadline" type="date" defaultValue={data.wedding.rsvpDeadline ?? ''} /><span className="font-normal leading-5 text-muted-foreground">Sem uma data, o fluxo público permanece bloqueado.</span></label>
+          <label className="flex min-h-11 items-center justify-between gap-4 rounded-xl border border-border px-4 py-3 text-sm font-medium"><span><span className="block">Exibir local após a confirmação</span><span className="mt-1 block font-normal text-muted-foreground">O local não aparece durante a identificação.</span></span><Switch checked={showVenue} onCheckedChange={setShowVenue} /></label>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="grid gap-2 text-sm font-medium">Nome do local<Input className="h-11" name="venueName" defaultValue={data.wedding.venueName} placeholder="Ex.: Casa do Bosque" /></label>
+            <label className="grid gap-2 text-sm font-medium sm:col-span-2">Endereço<Input className="h-11" name="venueAddress" defaultValue={data.wedding.venueAddress} placeholder="Rua, número, bairro e cidade" /></label>
+            <label className="grid gap-2 text-sm font-medium sm:col-span-2">Link do Google Maps<Input className="h-11" name="venueMapsUrl" type="url" defaultValue={data.wedding.venueMapsUrl} placeholder="https://maps.google.com/…" /></label>
+          </div>
+          <Button className="h-11 justify-self-start" disabled={saving}>{saving ? 'Salvando…' : 'Salvar configurações'}</Button>
+        </div>
+      </form>
     </>
   );
+}
+
+type HistoryItem = { id: string; subjectName: string | null; previousResponse: string | null; newResponse: string | null; source: string; note: string; createdAt: string; actorName: string | null };
+
+function InvitationHistory({ invitationId }: { invitationId: string }) {
+  const [history, setHistory] = useState<HistoryItem[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  async function load() {
+    if (history || loading) return;
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/guest-invitations/${invitationId}/history`);
+      const body = await response.json() as { history?: HistoryItem[] };
+      setHistory(body.history ?? []);
+    } finally { setLoading(false); }
+  }
+  return <details className="mt-4 border-t border-border pt-3" onToggle={(event) => { if (event.currentTarget.open) void load(); }}><summary className="cursor-pointer text-xs font-medium text-muted-foreground">Histórico de alterações</summary><div className="mt-3 space-y-3">{loading && <p className="text-xs text-muted-foreground">Carregando histórico…</p>}{history?.length === 0 && <p className="text-xs text-muted-foreground">Nenhuma alteração registrada.</p>}{history?.map((item) => <div key={item.id} className="border-l-2 border-border pl-3 text-xs"><p className="font-medium">{item.subjectName ? `${item.subjectName}: ${item.previousResponse} → ${item.newResponse}` : 'Resposta enviada'}</p><p className="mt-1 text-muted-foreground">{item.source === 'admin' ? `Administração${item.actorName ? ` · ${item.actorName}` : ''}` : 'Convidado'} · {new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(item.createdAt))}</p>{item.note && <p className="mt-1 text-muted-foreground">Observação: {item.note}</p>}</div>)}</div></details>;
 }
 
 function Checklist({

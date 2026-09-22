@@ -21,9 +21,13 @@ after(async () => { await client.end(); });
 
 void test('migration creates the complete schema without domain seeds', async () => {
   const tables = await client.query<{ tablename: string }>(`SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename NOT LIKE '__drizzle%'`);
-  assert.equal(tables.rowCount, 25);
+  assert.equal(tables.rowCount, 33);
   const paletteColumn = await client.query<{ data_type: string }>(`SELECT data_type FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'weddings' AND column_name = 'palette'`);
   assert.equal(paletteColumn.rows[0]?.data_type, 'jsonb');
+  const rsvpColumns = await client.query<{ column_name: string }>(`SELECT column_name FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'weddings'
+      AND column_name IN ('rsvp_deadline', 'show_venue_after_rsvp', 'venue_name', 'venue_address', 'venue_maps_url')`);
+  assert.equal(rsvpColumns.rowCount, 5);
   const counts = await client.query<{ count: string }>('SELECT (SELECT count(*) FROM weddings) + (SELECT count(*) FROM payments) + (SELECT count(*) FROM vendors) + (SELECT count(*) FROM guests) + (SELECT count(*) FROM household_items) AS count');
   assert.equal(counts.rows[0].count, '0');
 });

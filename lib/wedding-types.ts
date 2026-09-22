@@ -58,7 +58,10 @@ export type GuestInvitation = {
   additionalGuestLimit: number;
   token: string;
   lastSharedAt: string | null;
+  lastResponseAt: string | null;
+  rsvpNote: string;
   guestIds: string[];
+  companions: Array<{ id: string; name: string; ageGroup: string }>;
 };
 
 export type ChecklistItem = {
@@ -160,6 +163,11 @@ export type WeddingSnapshot = {
     guestEstimate: number;
     publicSlug: string;
     whatsappMessageTemplate: string | null;
+    rsvpDeadline: string | null;
+    showVenueAfterRsvp: boolean;
+    venueName: string;
+    venueAddress: string;
+    venueMapsUrl: string;
     palettes: WeddingPalette[];
   };
   categories: BudgetCategory[];

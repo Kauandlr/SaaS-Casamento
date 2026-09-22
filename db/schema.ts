@@ -89,6 +89,11 @@ export const weddings = pgTable(
     guestEstimate: integer('guest_estimate').notNull().default(0),
     publicSlug: text('public_slug'),
     whatsappMessageTemplate: text('whatsapp_message_template'),
+    rsvpDeadline: date('rsvp_deadline'),
+    showVenueAfterRsvp: boolean('show_venue_after_rsvp').notNull().default(false),
+    venueName: text('venue_name').notNull().default(''),
+    venueAddress: text('venue_address').notNull().default(''),
+    venueMapsUrl: text('venue_maps_url').notNull().default(''),
     palette: jsonb('palette'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -249,6 +254,8 @@ export const guestInvitationGroups = pgTable(
     additionalGuestLimit: integer('additional_guest_limit').notNull().default(0),
     publicToken: text('public_token').notNull(),
     lastSharedAt: timestamp('last_shared_at', { withTimezone: true, mode: 'string' }),
+    lastResponseAt: timestamp('last_response_at', { withTimezone: true, mode: 'string' }),
+    rsvpNote: text('rsvp_note').notNull().default(''),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -276,6 +283,7 @@ export const guests = pgTable(
     role: text('role').notNull().default('convidado'),
     ageGroup: text('age_group').notNull(),
     rsvp: text('rsvp').notNull(),
+    rsvpRespondedAt: timestamp('rsvp_responded_at', { withTimezone: true, mode: 'string' }),
     linkUrl: text('link_url').notNull().default(''),
     createdAt: createdAt(),
   },
@@ -322,6 +330,75 @@ export const invitationShareAttempts = pgTable(
     index('idx_invitation_share_attempts_wedding').on(table.weddingId, table.createdAt),
     index('idx_invitation_share_attempts_group').on(table.invitationGroupId),
   ],
+);
+
+export const rsvpLookupChallenges = pgTable(
+  'rsvp_lookup_challenges',
+  {
+    tokenHash: text('token_hash').primaryKey(),
+    weddingId: uuid('wedding_id').notNull().references(() => weddings.id, { onDelete: 'cascade' }),
+    invitationIds: jsonb('invitation_ids').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'string' }).notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [index('idx_rsvp_lookup_challenges_expiry').on(table.expiresAt)],
+);
+
+export const rsvpAccessSessions = pgTable(
+  'rsvp_access_sessions',
+  {
+    tokenHash: text('token_hash').primaryKey(),
+    weddingId: uuid('wedding_id').notNull().references(() => weddings.id, { onDelete: 'cascade' }),
+    invitationGroupId: uuid('invitation_group_id').notNull().references(() => guestInvitationGroups.id, { onDelete: 'cascade' }),
+    expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'string' }).notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    index('idx_rsvp_access_sessions_invitation').on(table.invitationGroupId),
+    index('idx_rsvp_access_sessions_expiry').on(table.expiresAt),
+  ],
+);
+
+export const rsvpSubmissions = pgTable(
+  'rsvp_submissions',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    weddingId: uuid('wedding_id').notNull().references(() => weddings.id, { onDelete: 'cascade' }),
+    invitationGroupId: uuid('invitation_group_id').notNull().references(() => guestInvitationGroups.id, { onDelete: 'cascade' }),
+    source: text('source').notNull(),
+    actorUserId: text('actor_user_id').references(() => users.id, { onDelete: 'set null' }),
+    note: text('note').notNull().default(''),
+    createdAt: createdAt(),
+  },
+  (table) => [index('idx_rsvp_submissions_invitation_created').on(table.invitationGroupId, table.createdAt)],
+);
+
+export const rsvpResponseHistory = pgTable(
+  'rsvp_response_history',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    submissionId: uuid('submission_id').notNull().references(() => rsvpSubmissions.id, { onDelete: 'cascade' }),
+    guestId: uuid('guest_id').references(() => guests.id, { onDelete: 'set null' }),
+    subjectName: text('subject_name').notNull(),
+    subjectAgeGroup: text('subject_age_group').notNull().default(''),
+    previousResponse: text('previous_response').notNull(),
+    newResponse: text('new_response').notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [index('idx_rsvp_response_history_submission').on(table.submissionId)],
+);
+
+export const rsvpSecurityEvents = pgTable(
+  'rsvp_security_events',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    weddingId: uuid('wedding_id').references(() => weddings.id, { onDelete: 'cascade' }),
+    invitationGroupId: uuid('invitation_group_id').references(() => guestInvitationGroups.id, { onDelete: 'set null' }),
+    fingerprint: text('fingerprint').notNull(),
+    kind: text('kind').notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [index('idx_rsvp_security_events_created').on(table.createdAt)],
 );
 
 export const checklistItems = pgTable(

@@ -2,6 +2,7 @@ import { CalendarDots, HeartStraight, MapPin } from '@phosphor-icons/react/dist/
 import { notFound } from 'next/navigation';
 import { withRequestDb } from '@/db';
 import { getPublicWedding } from '@/lib/guest-invitations';
+import { Button } from '@/components/ui/button';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,6 +23,7 @@ export default async function WeddingSitePage({ params }: { params: Promise<{ sl
             <span className="inline-flex items-center gap-2"><CalendarDots size={19} />{formattedDate}</span>
             {wedding.city && <span className="inline-flex items-center gap-2"><MapPin size={19} />{wedding.city}</span>}
           </div>
+          <Button render={<a href={`/casamento/${slug}/confirmar`} />} className="mt-7 h-12 px-6">Confirmar presença</Button>
         </article>
       </main>
     );

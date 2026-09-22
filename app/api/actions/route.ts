@@ -5,6 +5,7 @@ import { db, getSnapshot, id, now, requireWeddingId } from '@/lib/wedding-data';
 import { withRequestDb } from '@/db';
 import { householdItemInputSchema } from '@/lib/household-item-input';
 import { readWeddingPalettes } from '@/lib/wedding-palettes';
+import { ensureGuestInvitationGroups } from '@/lib/guest-invitations';
 import {
   explainActionValidationError,
   giftListItemSchema,
@@ -20,6 +21,7 @@ import {
   palettesSchema,
   paymentSchema,
   rsvpSchema,
+  rsvpSettingsSchema,
   taskSchema,
   vendorSchema,
   weddingDateSchema,
@@ -54,6 +56,14 @@ export async function executeWeddingAction(
               createdAt,
             ),
         ]);
+        break;
+      }
+      case 'save_rsvp_settings': {
+        const payload = rsvpSettingsSchema.parse(body.payload);
+        await db().prepare(`UPDATE weddings SET rsvp_deadline = ?, show_venue_after_rsvp = ?,
+          venue_name = ?, venue_address = ?, venue_maps_url = ?, updated_at = ? WHERE id = ?`)
+          .bind(payload.rsvpDeadline, payload.showVenueAfterRsvp, payload.venueName,
+            payload.venueAddress, payload.venueMapsUrl, createdAt, weddingId).run();
         break;
       }
       case 'save_wedding_palette': {
@@ -266,12 +276,36 @@ export async function executeWeddingAction(
       }
       case 'set_guest_rsvp': {
         const payload = rsvpSchema.parse(body.payload);
-        const result = await db()
-          .prepare('UPDATE guests SET rsvp = ? WHERE id = ? AND wedding_id = ?')
-          .bind(payload.rsvp, payload.id, weddingId)
-          .run();
-        if (!result.meta.changes)
+        let guest = await db().prepare(`SELECT id, invitation_group_id, full_name, age_group, rsvp
+          FROM guests WHERE id = ? AND wedding_id = ?`).bind(payload.id, weddingId).first<Record<string, unknown>>();
+        if (!guest)
           return NextResponse.json({ error: 'Convidado não encontrado.' }, { status: 404 });
+        if (!guest.invitation_group_id) {
+          await ensureGuestInvitationGroups(weddingId);
+          guest = await db().prepare(`SELECT id, invitation_group_id, full_name, age_group, rsvp
+            FROM guests WHERE id = ? AND wedding_id = ?`).bind(payload.id, weddingId).first<Record<string, unknown>>();
+        }
+        if (!guest?.invitation_group_id)
+          return NextResponse.json({ error: 'Convite não encontrado.' }, { status: 404 });
+        if (guest.rsvp === payload.rsvp) break;
+        const submissionId = id();
+        const invitationId = String(guest.invitation_group_id ?? '');
+        const statements = [
+          db().prepare(`INSERT INTO rsvp_submissions
+            (id, wedding_id, invitation_group_id, source, actor_user_id, note, created_at)
+            VALUES (?, ?, ?, 'admin', ?, '', ?)`)
+            .bind(submissionId, weddingId, invitationId, user.userId, createdAt),
+          db().prepare(`INSERT INTO rsvp_response_history
+            (id, submission_id, guest_id, subject_name, subject_age_group, previous_response, new_response, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+            .bind(id(), submissionId, payload.id, guest.full_name, guest.age_group,
+              String(guest.rsvp || 'pendente'), payload.rsvp, createdAt),
+          db().prepare(`UPDATE guests SET rsvp = ?, rsvp_responded_at = ?
+            WHERE id = ? AND wedding_id = ?`).bind(payload.rsvp, createdAt, payload.id, weddingId),
+          db().prepare(`UPDATE guest_invitation_groups SET last_response_at = ?, updated_at = ?
+            WHERE id = ? AND wedding_id = ?`).bind(createdAt, createdAt, invitationId, weddingId),
+        ];
+        await db().batch(statements);
         break;
       }
       case 'add_task': {

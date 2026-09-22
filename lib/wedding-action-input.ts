@@ -63,7 +63,15 @@ export const idSchema = z.object({
 });
 
 export const rsvpSchema = idSchema.extend({
-  rsvp: z.enum(['ainda não convidado', 'aguardando', 'confirmado', 'não irá', 'talvez']),
+  rsvp: z.enum(['ainda não convidado', 'aguardando', 'pendente', 'confirmado', 'não irá', 'talvez']),
+});
+
+export const rsvpSettingsSchema = z.object({
+  rsvpDeadline: z.iso.date().nullable(),
+  showVenueAfterRsvp: z.boolean(),
+  venueName: z.string().trim().max(160),
+  venueAddress: z.string().trim().max(300),
+  venueMapsUrl: z.string().trim().pipe(z.url()).refine((value) => value.startsWith('https://'), 'Use um link HTTPS.').or(z.literal('')),
 });
 
 export const householdPlanSchema = z.object({

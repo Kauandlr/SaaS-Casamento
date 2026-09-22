@@ -26,6 +26,10 @@ function invitationGuests(invitation: GuestInvitation | undefined, guests: Guest
   return guests.filter((guest) => ids.has(guest.id));
 }
 
+function todayInSaoPaulo() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+}
+
 export function WhatsAppShareDialog({ open, onOpenChange, data, invitation, onSnapshot, onShared }: Props) {
   const members = useMemo(() => invitationGuests(invitation, data.guests), [invitation, data.guests]);
   const [origin, setOrigin] = useState('');
@@ -36,6 +40,7 @@ export function WhatsAppShareDialog({ open, onOpenChange, data, invitation, onSn
   const [familyName, setFamilyName] = useState('');
   const [customSalutation, setCustomSalutation] = useState('');
   const [additionalGuestLimit, setAdditionalGuestLimit] = useState(0);
+  const [deadline, setDeadline] = useState(data.wedding.rsvpDeadline ?? '');
   const [kind, setKind] = useState<'convite inicial' | 'lembrete'>('convite inicial');
   const [pending, setPending] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -53,6 +58,7 @@ export function WhatsAppShareDialog({ open, onOpenChange, data, invitation, onSn
       setAdditionalGuestLimit(invitation.additionalGuestLimit);
       setKind(invitation.lastSharedAt ? 'lembrete' : 'convite inicial');
     }
+    setDeadline(data.wedding.rsvpDeadline ?? '');
     setError('');
     setCopied(false);
   }, [open, invitation]);
@@ -90,6 +96,27 @@ export function WhatsAppShareDialog({ open, onOpenChange, data, invitation, onSn
     onSnapshot(body.snapshot);
   }
 
+  async function ensureOpenDeadline() {
+    if (deadline && deadline >= todayInSaoPaulo() && data.wedding.rsvpDeadline === deadline) return;
+    if (!deadline || deadline < todayInSaoPaulo()) throw new Error('Escolha uma data-limite igual ou posterior a hoje.');
+    const response = await fetch('/api/actions', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        action: 'save_rsvp_settings',
+        payload: {
+          rsvpDeadline: deadline,
+          showVenueAfterRsvp: data.wedding.showVenueAfterRsvp,
+          venueName: data.wedding.venueName,
+          venueAddress: data.wedding.venueAddress,
+          venueMapsUrl: data.wedding.venueMapsUrl,
+        },
+      }),
+    });
+    const body = await response.json() as { snapshot?: WeddingSnapshot; error?: string };
+    if (!response.ok || !body.snapshot) throw new Error(body.error ?? 'Não foi possível configurar o prazo.');
+    onSnapshot(body.snapshot);
+  }
+
   async function copyMessage() {
     try {
       await navigator.clipboard.writeText(message);
@@ -110,6 +137,7 @@ export function WhatsAppShareDialog({ open, onOpenChange, data, invitation, onSn
     setPending(true);
     setError('');
     try {
+      await ensureOpenDeadline();
       await saveInvitation();
       const response = await fetch('/api/whatsapp/share', {
         method: 'POST', headers: { 'content-type': 'application/json' },
@@ -172,6 +200,13 @@ export function WhatsAppShareDialog({ open, onOpenChange, data, invitation, onSn
           </NativeSelect>
         </label>}
         {invitation && !hasPhone && <div className="rounded-xl bg-amber-100 p-3 text-sm text-amber-950 dark:bg-amber-950 dark:text-amber-100">O número de WhatsApp não foi informado. Você ainda pode copiar a mensagem ou compartilhar sem destinatário.</div>}
+        {(!data.wedding.rsvpDeadline || data.wedding.rsvpDeadline < todayInSaoPaulo()) && (
+          <label className="grid gap-2 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm font-medium text-amber-950 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">
+            Defina o prazo para receber respostas
+            <Input className="h-11 bg-background text-foreground" type="date" min={todayInSaoPaulo()} value={deadline} onChange={(event) => setDeadline(event.target.value)} required />
+            <span className="font-normal leading-5">A data será salva antes de abrir o WhatsApp.</span>
+          </label>
+        )}
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
         <DialogFooter className="sticky bottom-0">
           <Button type="button" variant="outline" onClick={copyMessage}>{copied ? <CheckCircle /> : <Copy />}{copied ? 'Copiada' : 'Copiar mensagem'}</Button>
