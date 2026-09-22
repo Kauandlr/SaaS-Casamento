@@ -16,7 +16,7 @@ export const metadata: Metadata = {
   },
   robots: { index: false, follow: false },
   openGraph: {
-    title: 'Vínculo — Wedding Planning OS',
+    title: 'Vyra - Wedding',
     description: 'Seu casamento, organizado por inteiro.',
     type: 'website',
     images: [
@@ -30,7 +30,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Vínculo — Wedding Planning OS',
+    title: 'Vyra - Wedding',
     description: 'Seu casamento, organizado por inteiro.',
     images: ['https://vinculo-wedding-os.kauandelara.chatgpt.site/og.png'],
   },

@@ -1,15 +1,17 @@
 import { env } from 'cloudflare:workers';
 
-function keys(): { siteKey: string; secretKey: string } {
+function config(): { enabled: boolean; siteKey: string; secretKey: string } {
   const values = env as unknown as Record<string, string | undefined>;
   return {
+    enabled: values.TURNSTILE_ENABLED?.trim().toLowerCase() === 'true',
     siteKey: values.TURNSTILE_SITE_KEY?.trim() ?? '',
     secretKey: values.TURNSTILE_SECRET_KEY?.trim() ?? '',
   };
 }
 
 export function turnstileSiteKey(): string {
-  return keys().siteKey;
+  const { enabled, siteKey } = config();
+  return enabled ? siteKey : '';
 }
 
 export async function verifyTurnstile(
@@ -17,7 +19,9 @@ export async function verifyTurnstile(
   action: 'login' | 'register',
   request: Request,
 ): Promise<'ok' | 'invalid' | 'unavailable'> {
-  const { siteKey, secretKey } = keys();
+  const { enabled, siteKey, secretKey } = config();
+  if (!enabled) return 'ok';
+
   const hostname = new URL(request.url).hostname;
   const local = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
   const values = env as unknown as Record<string, string | undefined>;

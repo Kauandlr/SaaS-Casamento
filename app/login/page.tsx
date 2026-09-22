@@ -1,9 +1,10 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
-import { LoginForm } from './login-form';
 import { withRequestDb } from '@/db';
 import { getWeddingInvite } from '@/lib/wedding-invites';
 import { turnstileSiteKey } from '@/lib/turnstile';
+import { LoginForm } from './login-form';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,57 +12,73 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   return withRequestDb(async () => {
     const inviteToken = (await searchParams).convite ?? '';
     if (await getCurrentUser()) redirect(inviteToken ? `/convite?token=${encodeURIComponent(inviteToken)}` : '/');
+
     const invite = inviteToken ? await getWeddingInvite(inviteToken) : null;
     if (inviteToken && !invite) redirect('/convite?token=' + encodeURIComponent(inviteToken));
-    return (
-      <main className="grid min-h-dvh bg-[#f8f8f5] text-[#263b31] lg:grid-cols-[52%_48%]">
-        <section
-          aria-label="Celebração de casamento ao ar livre"
-          className="relative isolate flex min-h-64 flex-col justify-between overflow-hidden bg-[#354439] bg-[url('/login-wedding-garden.png')] bg-cover bg-center px-7 py-7 text-white sm:min-h-80 sm:px-10 sm:py-9 lg:min-h-dvh lg:px-14 lg:py-12"
-        >
-          <div className="absolute inset-0 -z-10 bg-gradient-to-b from-[#15261d]/55 via-transparent to-[#14251c]/75" />
-          <div className="flex items-center gap-3 text-lg font-medium tracking-[0.02em]">
-            <span className="flex size-9 items-center justify-center rounded-full border border-white/65 font-serif text-xl italic leading-none" aria-hidden="true">v</span>
-            Vínculo
-          </div>
 
-          <div className="max-w-[36rem]">
-            <p className="mb-3 text-[0.65rem] font-medium uppercase tracking-[0.3em] text-white/80 sm:mb-5">Planejar também é celebrar</p>
-            <h1 className="font-serif text-[2.35rem] leading-[1.06] tracking-[-0.035em] sm:text-5xl lg:text-[clamp(3.5rem,5vw,5.8rem)]">
-              Cada detalhe conta uma parte da sua história.
-            </h1>
-            <div className="mt-6 hidden items-center gap-4 text-sm text-white/85 lg:flex">
-              <span className="h-px w-10 bg-white/70" aria-hidden="true" />
-              Um lugar para sonhar, organizar e viver tudo juntos.
+    const registerHref = inviteToken ? `/cadastro?convite=${encodeURIComponent(inviteToken)}` : '/cadastro';
+
+    return (
+      <main className="min-h-dvh bg-[#f4f5f2] text-[#202721] lg:grid lg:grid-cols-[minmax(34rem,1fr)_minmax(26rem,0.72fr)]">
+        <section className="flex min-h-dvh flex-col px-6 py-6 sm:px-10 sm:py-8 lg:px-[clamp(3rem,6vw,7.5rem)] lg:py-10">
+          <header className="flex items-center justify-between gap-6">
+            <Link
+              href="/login"
+              className="text-[1.05rem] font-semibold tracking-[-0.035em] text-[#1e3025] focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#315d42]"
+              aria-label="Vínculo — página de login"
+            >
+              vínculo<span className="text-[#799781]">.</span>
+            </Link>
+
+            <p className="hidden text-sm text-[#5f6a61] sm:block">
+              Ainda não usa o Vínculo?{' '}
+              <Link
+                href={registerHref}
+                className="font-medium text-[#294c35] underline decoration-[#aabaae] underline-offset-4 transition-colors hover:decoration-[#294c35] focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[#315d42]"
+              >
+                Criar conta
+              </Link>
+            </p>
+          </header>
+
+          <div className="flex flex-1 items-center py-14 sm:py-20">
+            <div className="mx-auto w-full max-w-[24.5rem] lg:mx-0">
+              <h1 className="text-[2rem] font-semibold leading-[1.15] tracking-[-0.035em] text-[#1d2920]">
+                {inviteToken ? 'Entre para ver seu convite' : 'Entre na sua conta'}
+              </h1>
+              <p className="mt-3 text-[0.95rem] leading-6 text-[#667168]">
+                {inviteToken
+                  ? 'Use sua conta do Vínculo para aceitar o convite.'
+                  : 'Continue de onde vocês pararam.'}
+              </p>
+
+              <LoginForm
+                inviteToken={inviteToken}
+                invitedEmail={invite?.invitedEmail}
+                turnstileSiteKey={turnstileSiteKey()}
+              />
             </div>
           </div>
+
+          <footer className="flex items-center justify-between gap-4 text-xs text-[#7a837c]">
+            <span>© {new Date().getFullYear()} Vínculo</span>
+            <span className="hidden sm:inline">Planejamento de casamento, em um só lugar.</span>
+          </footer>
         </section>
 
-        <section className="flex flex-col px-7 py-10 sm:px-12 lg:min-h-dvh lg:px-14 lg:py-12">
-          <div className="hidden items-center justify-end gap-2 text-xs font-medium uppercase tracking-[0.2em] text-[#687c6d] lg:flex">
-            Seu espaço de planejamento
-            <span className="size-1.5 rounded-full bg-[#9aaf9c]" aria-hidden="true" />
-          </div>
-
-          <div className="mx-auto flex w-full max-w-[26rem] flex-1 flex-col justify-center py-3 lg:py-10">
-            <p className="mb-4 text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-[#6d8a72]">
-              {inviteToken ? 'Um convite para vocês' : 'Bem-vindos de volta'}
+        <aside
+          aria-label="Mesa de celebração ao ar livre"
+          className="relative m-3 hidden min-h-[calc(100dvh-1.5rem)] overflow-hidden rounded-[0.875rem] bg-[#24342a] lg:block"
+        >
+          <div className="absolute inset-0 bg-[url('/login-wedding-garden.png')] bg-cover bg-[position:56%_center]" />
+          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(18,32,23,0.04)_38%,rgba(18,32,23,0.62)_100%)]" />
+          <div className="absolute right-7 bottom-7 left-7 flex items-end justify-between gap-8 border-t border-white/35 pt-4 text-white">
+            <p className="max-w-[18rem] text-sm leading-6 text-white/90">
+              Orçamento, fornecedores, convidados e tarefas no mesmo ritmo.
             </p>
-            <h2 className="text-[2.25rem] font-medium leading-[1.1] tracking-[-0.055em] text-[#243a2e] sm:text-[2.75rem]">
-              {inviteToken ? 'Seu convite está esperando.' : 'Que bom ter você aqui.'}
-            </h2>
-            <p className="mt-4 max-w-sm text-[0.95rem] leading-7 text-[#718075]">
-              {inviteToken
-                ? 'Entre na sua conta para aceitar o convite e começar a planejar em conjunto.'
-                : 'Entre para continuar cuidando dos planos para o grande dia.'}
-            </p>
-            <LoginForm inviteToken={inviteToken} invitedEmail={invite?.invitedEmail} turnstileSiteKey={turnstileSiteKey()} />
+            <span className="shrink-0 text-xs tabular-nums text-white/70">01 / 01</span>
           </div>
-
-          <p className="mx-auto mt-10 w-full max-w-[26rem] text-center text-xs text-[#98a39a] lg:mt-0">
-            Feito para viver cada etapa a dois.
-          </p>
-        </section>
+        </aside>
       </main>
     );
   });

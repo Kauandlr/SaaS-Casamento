@@ -44,7 +44,7 @@ As migrations PostgreSQL ficam em `drizzle/postgres`. As migrations SQLite antig
 
 - Gere uma senha exclusiva para o PostgreSQL e preencha `POSTGRES_PASSWORD` e `DATABASE_URL` no `.env`. O Compose publica o banco apenas em `127.0.0.1` para ferramentas locais.
 - Em um volume PostgreSQL já existente, `POSTGRES_PASSWORD` não altera a senha do usuário automaticamente; rotacione a senha no banco antes de atualizar `DATABASE_URL`.
-- Configure `TURNSTILE_SITE_KEY` e `TURNSTILE_SECRET_KEY` com um widget Cloudflare Turnstile. Login e cadastro em hosts públicos falham de forma segura quando essas chaves estão ausentes.
+- O Cloudflare Turnstile fica desabilitado por padrão. Para ativá-lo, defina `TURNSTILE_ENABLED=true` e configure `TURNSTILE_SITE_KEY` e `TURNSTILE_SECRET_KEY` com um widget válido; com a proteção ativa, login e cadastro falham de forma segura quando alguma chave está ausente.
 - Mantenha `DATABASE_URL`, `OPENAI_API_KEY`, `RESEND_API_KEY`, `AUTH_PASSWORD_HASH` e `TURNSTILE_SECRET_KEY` somente em `.env`, `.dev.vars` ou no gerenciador de segredos do provedor.
 - O chat Luna aceita até 20 requisições por conta a cada hora e 100 por dia. Login e cadastro usam limites persistentes no PostgreSQL.
 - Aplique todas as migrations antes de iniciar uma nova versão. A migration `0009_security_rate_limits.sql` cria o armazenamento dos limites.
