@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Bell,
   CalendarDots,
+  CaretDown,
   CaretRight,
   Check,
   CheckCircle,
@@ -39,6 +40,12 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { CoupleAccess } from '@/components/couple-access';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   Dialog,
   DialogContent,
@@ -474,7 +481,7 @@ export function WeddingApp({
           </div>
         </aside>
 
-        <section className={`min-w-0 pb-24 ${view === 'guests' ? 'md:pb-0' : 'md:pb-8'}`}>
+        <section className="min-w-0 pb-24 md:pb-8">
           <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-3 border-b border-border/70 bg-background/92 px-4 backdrop-blur-xl md:px-7">
             <div className="min-w-0">
               <p className="truncate text-xs text-muted-foreground">
@@ -524,7 +531,7 @@ export function WeddingApp({
             </div>
           </header>
 
-          <div className={`mx-auto max-w-[1380px] px-4 py-6 md:px-7 md:py-8 ${view === 'guests' ? 'md:flex md:h-[calc(100dvh-4rem)] md:min-h-[30rem] md:flex-col' : ''}`}>
+          <div className="mx-auto max-w-[1380px] px-4 py-6 md:px-7 md:py-8">
             {view === 'overview' && (
               <Overview
                 data={data}
@@ -1387,7 +1394,7 @@ function Guests({
           />
         ))}
       </div>
-      <section className="rounded-2xl border border-border bg-card md:min-h-0 md:flex-1 md:overflow-auto">
+      <section className="overflow-hidden rounded-2xl border border-border bg-card">
         {items.length ? (
           <div className="divide-y divide-border">
             {items.map(({ invitation, members }) => {
@@ -1409,28 +1416,42 @@ function Guests({
                     : 'bg-muted text-muted-foreground';
               return (
                 <article key={invitation.id} className="p-4 sm:p-5">
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
+                  <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="font-semibold">{invitation.name}</h3>
                         <Badge className={statusTone}>{status}</Badge>
                       </div>
-                      <p className="mt-1 text-sm leading-6 text-muted-foreground">{members.map((member) => member.fullName).join(', ')}</p>
+                      <p className="mt-1 max-w-[85ch] text-pretty text-sm leading-6 text-muted-foreground">{members.map((member) => member.fullName).join(', ')}</p>
                       <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                         <span>{members.length} {members.length === 1 ? 'pessoa' : 'pessoas'}</span>
                         <span>{invitation.responsiblePhone || 'WhatsApp não informado'}</span>
                         <span>{invitation.lastSharedAt ? `Última abertura: ${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(invitation.lastSharedAt))}` : 'WhatsApp ainda não aberto'}</span>
                       </div>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Button type="button" variant="outline" onClick={() => onShare(invitation)}>
+                    <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                      <Button type="button" variant="outline" className="grow sm:grow-0" onClick={() => onShare(invitation)}>
                         <WhatsappLogo size={17} weight="fill" />Enviar convite
                       </Button>
-                      {members.map((member) => (
-                        <Button key={member.id} type="button" variant="ghost" size="icon" aria-label={`Editar ${member.fullName}`} title={`Editar ${member.fullName}`} onClick={() => onEdit(member)}>
-                          <PencilSimple size={17} />
+                      {members.length === 1 ? (
+                        <Button type="button" variant="ghost" className="grow sm:grow-0" onClick={() => onEdit(members[0])}>
+                          <PencilSimple size={17} />Editar pessoa
                         </Button>
-                      ))}
+                      ) : (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger render={<Button type="button" variant="ghost" className="grow sm:grow-0" />}>
+                            <PencilSimple size={17} />Editar pessoas<CaretDown size={14} />
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="max-h-72 w-64 overflow-y-auto">
+                            {members.map((member) => (
+                              <DropdownMenuItem key={member.id} onClick={() => onEdit(member)} className="py-2">
+                                <PencilSimple size={16} />
+                                <span className="truncate">{member.fullName}</span>
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
                     </div>
                   </div>
                   <details className="mt-4 border-t border-border pt-3">
