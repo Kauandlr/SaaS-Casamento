@@ -97,6 +97,7 @@ function NativeSelect({
   return (
     <Select
       items={items}
+      modal={false}
       name={name}
       value={controlledValue}
       defaultValue={initialValue}

@@ -2,11 +2,13 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { isSameOrigin, login, setSessionCookie } from '@/lib/auth';
 import { withRequestDb } from '@/db';
+import { verifyTurnstile } from '@/lib/turnstile';
 
 const schema = z.object({
   email: z.email().transform((value) => value.trim()),
   password: z.string().min(1).max(500),
   rememberLogin: z.boolean().optional().default(false),
+  turnstileToken: z.string().max(2048).optional(),
 });
 
 export async function POST(request: Request) {
@@ -15,6 +17,12 @@ export async function POST(request: Request) {
   return withRequestDb(async () => {
     try {
       const payload = schema.parse(await request.json());
+      const challenge = await verifyTurnstile(payload.turnstileToken, 'login', request);
+      if (challenge !== 'ok')
+        return NextResponse.json(
+          { error: challenge === 'invalid' ? 'Confirme o desafio anti-bot.' : 'Verificacao anti-bot indisponivel.' },
+          { status: challenge === 'invalid' ? 403 : 503 },
+        );
       const result = await login(payload.email, payload.password, request, payload.rememberLogin);
       if (!result.ok)
         return NextResponse.json(
@@ -24,7 +32,7 @@ export async function POST(request: Request) {
                 ? 'Muitas tentativas. Aguarde alguns minutos.'
                 : 'E-mail ou senha inválidos.',
           },
-          { status: result.status },
+          { status: result.status, ...(result.status === 429 ? { headers: { 'Retry-After': '900' } } : {}) },
         );
       await setSessionCookie(result.token, payload.rememberLogin);
       return NextResponse.json({ ok: true });

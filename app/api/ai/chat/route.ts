@@ -15,6 +15,7 @@ import {
   type LunaProposal,
 } from '@/lib/luna';
 import { explainActionValidationError } from '@/lib/wedding-action-input';
+import { consumeRateLimit } from '@/lib/rate-limit';
 
 const requestSchema = z.object({
   message: z.string().trim().min(1).max(4000),
@@ -136,6 +137,12 @@ export async function POST(request: Request) {
         return NextResponse.json(
           { error: 'Luna ainda não está configurada. Defina OPENAI_API_KEY no ambiente.' },
           { status: 503 },
+        );
+      if (!(await consumeRateLimit('ai:hour', user.userId, 20, 60 * 60 * 1000)) ||
+          !(await consumeRateLimit('ai:day', user.userId, 100, 24 * 60 * 60 * 1000)))
+        return NextResponse.json(
+          { error: 'Limite de uso da Luna atingido. Tente novamente mais tarde.' },
+          { status: 429, headers: { 'Retry-After': '3600' } },
         );
       const weddingId = await requireWeddingId(user.userId);
       const conversationId = await getConversation(weddingId, input.conversationId);

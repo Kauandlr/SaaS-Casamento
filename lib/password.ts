@@ -29,6 +29,14 @@ export async function verifyPassword(password: string, encoded: string): Promise
   } catch { return false; }
 }
 
+export async function hashPassword(password: string): Promise<string> {
+  const iterations = 600_000;
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations, hash: 'SHA-256' }, key, 256);
+  return `pbkdf2-sha256$${iterations}$${base64url(salt)}$${base64url(new Uint8Array(bits))}`;
+}
+
 export async function verifyPlainPassword(password: string, expected: string): Promise<boolean> {
   const [actualDigest, expectedDigest] = await Promise.all([
     crypto.subtle.digest('SHA-256', new TextEncoder().encode(password)),

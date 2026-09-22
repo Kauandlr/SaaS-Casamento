@@ -9,6 +9,7 @@ import {
   explainActionValidationError,
   giftListItemSchema,
   guestSchema,
+  updateGuestSchema,
   householdCategorySchema,
   householdGiftSchema,
   householdPlanSchema,
@@ -210,14 +211,16 @@ export async function executeWeddingAction(
         await db().batch([
           db()
             .prepare(`INSERT INTO guests (
-              id, wedding_id, full_name, side, group_name, age_group, rsvp, link_url, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+              id, wedding_id, full_name, side, group_name, group_type, "role", age_group, rsvp, link_url, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
             .bind(
               entityId,
               weddingId,
               payload.fullName,
               payload.side,
               payload.groupName,
+              payload.groupType,
+              payload.role,
               payload.ageGroup,
               payload.rsvp,
               payload.linkUrl,
@@ -237,6 +240,28 @@ export async function executeWeddingAction(
               createdAt,
             ),
         ]);
+        break;
+      }
+      case 'update_guest': {
+        const payload = updateGuestSchema.parse(body.payload);
+        const result = await db()
+          .prepare(`UPDATE guests SET full_name = ?, side = ?, group_name = ?, group_type = ?,
+            "role" = ?, age_group = ?, rsvp = ?, link_url = ? WHERE id = ? AND wedding_id = ?`)
+          .bind(
+            payload.fullName,
+            payload.side,
+            payload.groupName,
+            payload.groupType,
+            payload.role,
+            payload.ageGroup,
+            payload.rsvp,
+            payload.linkUrl,
+            payload.id,
+            weddingId,
+          )
+          .run();
+        if (!result.meta.changes)
+          return NextResponse.json({ error: 'Convidado não encontrado.' }, { status: 404 });
         break;
       }
       case 'set_guest_rsvp': {

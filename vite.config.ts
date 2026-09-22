@@ -16,21 +16,9 @@ export default defineConfig(async ({ mode }) => {
   const localBindingConfig = {
     main: 'vinext/server/fetch-handler',
     compatibility_flags: ['nodejs_compat'],
-    vars: Object.fromEntries(
-      Object.entries({
-        DATABASE_URL: values.DATABASE_URL,
-        AUTH_USER_ID: values.AUTH_USER_ID,
-        AUTH_EMAIL: values.AUTH_EMAIL,
-        AUTH_DISPLAY_NAME: values.AUTH_DISPLAY_NAME,
-        AUTH_PASSWORD_HASH: values.AUTH_PASSWORD_HASH,
-        // Temporary compatibility for installations that have not migrated
-        // their local secret to AUTH_PASSWORD_HASH yet.
-        AUTH_PASSWORD: values.AUTH_PASSWORD,
-        OPENAI_API_KEY: values.OPENAI_API_KEY,
-        OPENAI_MODEL: values.OPENAI_MODEL ?? 'gpt-5.6-luna',
-        OPENAI_BASE_URL: values.OPENAI_BASE_URL,
-      }).filter((entry): entry is [string, string] => Boolean(entry[1])),
-    ),
+    // The Cloudflare plugin loads local secrets from .env/.dev.vars. Never
+    // serialize credentials into the generated Wrangler configuration.
+    vars: { OPENAI_MODEL: values.OPENAI_MODEL ?? 'gpt-5.6-luna' },
     d1_databases: d1
       ? [
           {
@@ -40,12 +28,10 @@ export default defineConfig(async ({ mode }) => {
           },
         ]
       : [],
-    hyperdrive: [
+    hyperdrive: values.DATABASE_URL ? [] : [
       {
         binding: 'HYPERDRIVE',
         id: SITE_CREATOR_PLACEHOLDER_DATABASE_ID,
-        localConnectionString:
-          values.DATABASE_URL ?? 'postgres://vinculo:vinculo@127.0.0.1:5437/vinculo',
       },
     ],
     r2_buckets: r2

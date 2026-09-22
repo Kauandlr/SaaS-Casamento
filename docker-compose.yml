@@ -5,7 +5,10 @@ services:
       dockerfile: Dockerfile
     environment:
       NODE_ENV: production
-      DATABASE_URL: ${DATABASE_URL:-postgres://vinculo:vinculo@postgres:5432/vinculo}
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL with a strong database password}
+      APP_URL: ${APP_URL:?Set APP_URL to the public application URL}
+      RESEND_API_KEY: ${RESEND_API_KEY:?Set RESEND_API_KEY}
+      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:?Set RESEND_FROM_EMAIL with a verified Resend domain}
       AUTH_USER_ID: ${AUTH_USER_ID:-}
       AUTH_EMAIL: ${AUTH_EMAIL:-}
       AUTH_DISPLAY_NAME: ${AUTH_DISPLAY_NAME:-}
@@ -15,6 +18,8 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5.6-luna}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:?Set TURNSTILE_SITE_KEY}
+      TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:?Set TURNSTILE_SECRET_KEY}
     depends_on:
       postgres:
         condition: service_healthy
@@ -40,9 +45,9 @@ services:
     environment:
       POSTGRES_DB: vinculo
       POSTGRES_USER: vinculo
-      POSTGRES_PASSWORD: vinculo
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a strong POSTGRES_PASSWORD}
     ports:
-      - "${POSTGRES_PORT:-5437}:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5437}:5432"
     volumes:
       - vinculo-postgres-data:/var/lib/postgresql/data
     restart: unless-stopped

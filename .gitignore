@@ -18,6 +18,7 @@ coverage/
 .env
 .env.*
 !.env.example
+.dev.vars*
 /certs/
 
 # Logs

@@ -835,17 +835,19 @@ export function HouseholdView({
         </section>
       </div>
 
-      <HouseholdDialogs
-        dialog={dialog}
-        selected={selected}
-        data={data}
-        saving={saving}
-        onClose={() => {
-          setDialog(null);
-          setSelected(null);
-        }}
-        onRun={run}
-      />
+      {dialog !== null && (
+        <HouseholdDialogs
+          dialog={dialog}
+          selected={selected}
+          data={data}
+          saving={saving}
+          onClose={() => {
+            setDialog(null);
+            setSelected(null);
+          }}
+          onRun={run}
+        />
+      )}
     </>
   );
 }

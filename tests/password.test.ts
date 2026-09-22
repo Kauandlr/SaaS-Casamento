@@ -1,9 +1,17 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
-import { verifyPassword, verifyPlainPassword } from '@/lib/password';
+import { hashPassword, verifyPassword, verifyPlainPassword } from '@/lib/password';
 
 const passwordHash =
   'pbkdf2-sha256$600000$mRfqHZWU3-82U1F_Nx0_Ug$g6wIz-fNMPC7EKwUuHtVGeXJ4Md0kxQEtS6CV8E7zwM';
+
+void test('new account passwords are salted and verifiable', async () => {
+  const first = await hashPassword('UmaSenhaSegura123!');
+  const second = await hashPassword('UmaSenhaSegura123!');
+  assert.notEqual(first, second);
+  assert.equal(await verifyPassword('UmaSenhaSegura123!', first), true);
+  assert.equal(await verifyPassword('senha-errada', first), false);
+});
 
 void test('PBKDF2 accepts only the configured password', async () => {
   assert.equal(await verifyPassword('SenhaTeste123!', passwordHash), true);

@@ -10,7 +10,7 @@ before(async () => {
   await client.connect();
   await client.query(`TRUNCATE TABLE
     ai_action_proposals, ai_messages, ai_conversations,
-    auth_login_attempts, auth_sessions, household_files, household_payments,
+    auth_login_attempts, auth_sessions, security_rate_limits, wedding_invites, household_files, household_payments,
     household_purchases, household_gifts, household_item_options, household_items,
     household_checklist_items, household_categories, household_plans, activity_log,
     payments, vendors, guests, checklist_items, budget_categories, wedding_members,
@@ -21,7 +21,7 @@ after(async () => { await client.end(); });
 
 void test('migration creates the complete schema without domain seeds', async () => {
   const tables = await client.query<{ tablename: string }>(`SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename NOT LIKE '__drizzle%'`);
-  assert.equal(tables.rowCount, 23);
+  assert.equal(tables.rowCount, 25);
   const paletteColumn = await client.query<{ data_type: string }>(`SELECT data_type FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'weddings' AND column_name = 'palette'`);
   assert.equal(paletteColumn.rows[0]?.data_type, 'jsonb');
   const counts = await client.query<{ count: string }>('SELECT (SELECT count(*) FROM weddings) + (SELECT count(*) FROM payments) + (SELECT count(*) FROM vendors) + (SELECT count(*) FROM guests) + (SELECT count(*) FROM household_items) AS count');
@@ -53,5 +53,28 @@ void test('workspace base records and session lifecycle are isolated by user', a
     await client.query('DELETE FROM auth_sessions WHERE token_hash = $1', ['session-hash']);
     const revoked = await client.query('SELECT count(*) AS count FROM auth_sessions WHERE token_hash = $1', ['session-hash']);
     assert.equal(revoked.rows[0].count, '0');
+  } finally { await client.query('ROLLBACK'); }
+});
+
+void test('a wedding has one owner and one partner with separate accounts', async () => {
+  await client.query('BEGIN');
+  try {
+    await client.query(`INSERT INTO users (id,email,display_name,password_hash,created_at,updated_at) VALUES
+      ('couple-owner','owner@couple.local','Owner','hash',now(),now()),
+      ('couple-partner','partner@couple.local','Partner','hash',now(),now()),
+      ('couple-third','third@couple.local','Third','hash',now(),now())`);
+    const wedding = await client.query<{ id: string }>(`INSERT INTO weddings (owner_user_id,title,person_one,person_two,wedding_date,created_at,updated_at)
+      VALUES ('couple-owner','Casamento do casal','A','B','2027-06-12',now(),now()) RETURNING id`);
+    const weddingId = wedding.rows[0].id;
+    await client.query(`INSERT INTO wedding_members (wedding_id,user_id,email,role,permissions,created_at) VALUES
+      ($1,'couple-owner','owner@couple.local','owner','["*"]',now()),
+      ($1,'couple-partner','partner@couple.local','partner','["*"]',now())`, [weddingId]);
+    const visible = await client.query<{ id: string }>(`SELECT w.id FROM weddings w JOIN wedding_members m ON m.wedding_id = w.id
+      WHERE m.user_id = 'couple-partner'`);
+    assert.equal(visible.rows[0]?.id, weddingId);
+    await client.query('SAVEPOINT third_member');
+    await assert.rejects(client.query(`INSERT INTO wedding_members (wedding_id,user_id,email,role,permissions,created_at)
+      VALUES ($1,'couple-third','third@couple.local','partner','["*"]',now())`, [weddingId]), { code: '23505' });
+    await client.query('ROLLBACK TO SAVEPOINT third_member');
   } finally { await client.query('ROLLBACK'); }
 });

@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { z } from 'zod';
 import { lunaProposalFromToolCall } from '@/lib/luna-proposal';
 import { lunaTools } from '@/lib/luna-tools';
-import { explainActionValidationError, weddingActionNames } from '@/lib/wedding-action-input';
+import { explainActionValidationError, guestSchema, updateGuestSchema, weddingActionNames } from '@/lib/wedding-action-input';
 
 const supportedFormats = new Set([
   'date-time',
@@ -126,8 +126,24 @@ void test('fills only safe defaults after essential guest data is provided', () 
     fullName: 'Vinicius Luiz da Silva',
     side: 'Ambos',
     groupName: '',
+    groupType: 'individual',
+    role: 'convidado',
     ageGroup: 'adulto',
     rsvp: 'ainda não convidado',
     linkUrl: '',
   });
+});
+
+void test('guest relationships require a shared group name and can be edited', () => {
+  const guest = {
+    fullName: 'Ana Ribeiro',
+    side: 'Ambos',
+    ageGroup: 'criança',
+    groupType: 'família',
+    groupName: 'Família Ribeiro',
+    role: 'convidado',
+  };
+  assert.equal(guestSchema.safeParse(guest).success, true);
+  assert.equal(guestSchema.safeParse({ ...guest, groupName: '' }).success, false);
+  assert.equal(updateGuestSchema.safeParse({ ...guest, id: crypto.randomUUID(), role: 'madrinha' }).success, true);
 });

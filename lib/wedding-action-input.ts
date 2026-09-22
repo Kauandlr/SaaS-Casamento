@@ -37,10 +37,17 @@ export const guestSchema = z.object({
   fullName: z.string().trim().min(2).max(120).describe('Nome completo do convidado.'),
   side: z.enum(['Pessoa 1', 'Pessoa 2', 'Ambos']).describe('Lado do convidado; pergunte se não estiver claro.'),
   groupName: z.string().trim().max(100).default('').describe('Família ou grupo; use string vazia quando ausente.'),
+  groupType: z.enum(['individual', 'casal', 'família', 'outro']).default('individual'),
+  role: z.enum(['convidado', 'padrinho', 'madrinha']).default('convidado'),
   ageGroup: z.enum(['adulto', 'adolescente', 'criança', 'bebê']).describe('Faixa etária; pergunte se não estiver clara.'),
   rsvp: z.enum(['ainda não convidado', 'aguardando', 'confirmado', 'não irá', 'talvez']).default('ainda não convidado'),
   linkUrl: linkUrlSchema,
+}).refine((guest) => guest.groupType === 'individual' || guest.groupName.length > 0, {
+  path: ['groupName'],
+  message: 'Informe o nome do casal, família ou grupo.',
 });
+
+export const updateGuestSchema = guestSchema.safeExtend({ id: z.uuid() });
 
 export const taskSchema = z.object({
   title: z.string().trim().min(2).max(140).describe('Descrição da tarefa.'),
@@ -182,6 +189,7 @@ export function parseWeddingActionPayload(action: WeddingActionName, payload: un
 
 const fieldLabels: Record<string, string> = {
   fullName: 'nome completo',
+  groupName: 'nome do casal, família ou grupo',
   side: 'lado (Pessoa 1, Pessoa 2 ou Ambos)',
   ageGroup: 'faixa etária (adulto, adolescente, criança ou bebê)',
   rsvp: 'confirmação de presença (ainda não convidado, aguardando, confirmado, não irá ou talvez)',

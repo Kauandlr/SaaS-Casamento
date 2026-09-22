@@ -37,6 +37,8 @@ export type Guest = {
   fullName: string;
   side: string;
   groupName: string;
+  groupType: string;
+  role: string;
   ageGroup: string;
   rsvp: string;
   linkUrl: string;

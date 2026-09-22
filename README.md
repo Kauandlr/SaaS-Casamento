@@ -10,7 +10,7 @@ Wedding Planning OS privado para organizar o casamento com clareza financeira e 
 - Lista de convidados com grupos e confirmação de presença.
 - Lista de presentes integrada ao enxoval, com itens, links e registro do que foi recebido.
 - Checklist com prioridade, responsável, prazo e conclusão.
-- Login por conta configurada no ambiente, isolamento por casamento e persistência em PostgreSQL.
+- Cadastro e login com contas individuais, convite para o parceiro e planejamento compartilhado em PostgreSQL.
 - Layout responsivo, tema claro/escuro e ferramentas WebMCP para resumo e tarefas.
 
 ## Desenvolvimento
@@ -23,7 +23,11 @@ npm run db:migrate
 npm run dev
 ```
 
-O PostgreSQL local fica na porta `5437`. Copie `.env.example`, defina a conta, gere a senha com `npm run auth:hash` e salve a saída entre as aspas simples de `AUTH_PASSWORD_HASH` (elas preservam os caracteres `$` no Docker Compose). O primeiro acesso autenticado abre o onboarding do casamento; nenhum dado de exemplo é criado. `AUTH_PASSWORD` em texto puro continua aceito apenas para compatibilidade com instalações antigas e deve ser migrado.
+O PostgreSQL local fica na porta `5437`. Copie `.env.example` e configure `DATABASE_URL`. Abra `/cadastro` para criar a primeira conta. Após configurar o casamento, use **Acesso do casal**, informe o e-mail do parceiro e envie o convite. O Vínculo envia pelo Resend um link de uso único, válido por 7 dias e restrito ao e-mail informado. O parceiro entra ou cria sua própria conta com esse e-mail; os dois passam a acessar o mesmo planejamento. Um novo envio invalida o convite anterior. Nenhum dado de exemplo é criado.
+
+Para os convites, configure `APP_URL` com a URL pública do app, `RESEND_API_KEY` com uma chave que tenha permissão de envio e `RESEND_FROM_EMAIL` com um remetente de domínio verificado no Resend. Em desenvolvimento, `APP_URL=http://localhost:3000` é aceito. Em produção, use HTTPS. A integração chama diretamente a API de e-mails do Resend; falhas de entrega não deixam convites ativos no banco.
+
+As variáveis `AUTH_USER_ID`, `AUTH_EMAIL`, `AUTH_DISPLAY_NAME` e `AUTH_PASSWORD_HASH` são opcionais e mantêm o acesso de instalações antigas. Após o primeiro login legado, a senha é armazenada na tabela `users`. Para gerar um hash legado, use `npm run auth:hash`; mantenha as aspas simples em `.env` para preservar os caracteres `$` no Docker Compose.
 
 Validação:
 
@@ -35,6 +39,15 @@ npm run build
 ```
 
 As migrations PostgreSQL ficam em `drizzle/postgres`. As migrations SQLite antigas continuam em `drizzle/` apenas como histórico e não são executadas pelo novo comando.
+
+## Configuração segura
+
+- Gere uma senha exclusiva para o PostgreSQL e preencha `POSTGRES_PASSWORD` e `DATABASE_URL` no `.env`. O Compose publica o banco apenas em `127.0.0.1` para ferramentas locais.
+- Em um volume PostgreSQL já existente, `POSTGRES_PASSWORD` não altera a senha do usuário automaticamente; rotacione a senha no banco antes de atualizar `DATABASE_URL`.
+- Configure `TURNSTILE_SITE_KEY` e `TURNSTILE_SECRET_KEY` com um widget Cloudflare Turnstile. Login e cadastro em hosts públicos falham de forma segura quando essas chaves estão ausentes.
+- Mantenha `DATABASE_URL`, `OPENAI_API_KEY`, `RESEND_API_KEY`, `AUTH_PASSWORD_HASH` e `TURNSTILE_SECRET_KEY` somente em `.env`, `.dev.vars` ou no gerenciador de segredos do provedor.
+- O chat Luna aceita até 20 requisições por conta a cada hora e 100 por dia. Login e cadastro usam limites persistentes no PostgreSQL.
+- Aplique todas as migrations antes de iniciar uma nova versão. A migration `0009_security_rate_limits.sql` cria o armazenamento dos limites.
 
 ## Luna: erro TLS na implantação Docker
 

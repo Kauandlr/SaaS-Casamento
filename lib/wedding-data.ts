@@ -127,7 +127,7 @@ export async function getSnapshot(identity: WorkspaceIdentity): Promise<WeddingS
     householdChecklistRows,
     householdPaymentRows,
   ] = await Promise.all([
-    db().prepare('SELECT * FROM weddings WHERE id = ? AND owner_user_id = ?').bind(weddingId, identity.userId).first<Row>(),
+    db().prepare('SELECT * FROM weddings WHERE id = ?').bind(weddingId).first<Row>(),
     rows(db().prepare('SELECT * FROM budget_categories WHERE wedding_id = ? ORDER BY position, name').bind(weddingId)),
     rows(db().prepare('SELECT * FROM payments WHERE wedding_id = ? ORDER BY due_date').bind(weddingId)),
     rows(db().prepare('SELECT * FROM vendors WHERE wedding_id = ? ORDER BY favorite DESC, name').bind(weddingId)),
@@ -156,7 +156,7 @@ export async function getSnapshot(identity: WorkspaceIdentity): Promise<WeddingS
     categories: categoryRows.map((row) => ({ id: text(row, 'id'), name: text(row, 'name'), plannedCents: number(row, 'planned_cents'), contractedCents: number(row, 'contracted_cents'), paidCents: number(row, 'paid_cents') })),
     payments: paymentRows.map((row) => ({ id: text(row, 'id'), title: text(row, 'title'), vendorName: text(row, 'vendor_name'), categoryId: text(row, 'category_id') || null, amountCents: number(row, 'amount_cents'), dueDate: text(row, 'due_date'), status: text(row, 'status'), payer: text(row, 'payer'), linkUrl: text(row, 'link_url') })),
     vendors: vendorRows.map((row) => ({ id: text(row, 'id'), name: text(row, 'name'), company: text(row, 'company'), category: text(row, 'category'), phone: text(row, 'phone'), email: text(row, 'email'), linkUrl: text(row, 'link_url'), quotedCents: number(row, 'quoted_cents'), status: text(row, 'status'), rating: number(row, 'rating'), favorite: bool(row, 'favorite') })),
-    guests: guestRows.map((row) => ({ id: text(row, 'id'), fullName: text(row, 'full_name'), side: text(row, 'side'), groupName: text(row, 'group_name'), ageGroup: text(row, 'age_group'), rsvp: text(row, 'rsvp'), linkUrl: text(row, 'link_url') })),
+    guests: guestRows.map((row) => ({ id: text(row, 'id'), fullName: text(row, 'full_name'), side: text(row, 'side'), groupName: text(row, 'group_name'), groupType: text(row, 'group_type'), role: text(row, 'role'), ageGroup: text(row, 'age_group'), rsvp: text(row, 'rsvp'), linkUrl: text(row, 'link_url') })),
     checklist: checklistRows.map((row) => ({ id: text(row, 'id'), title: text(row, 'title'), category: text(row, 'category'), responsible: text(row, 'responsible'), priority: text(row, 'priority'), dueDate: text(row, 'due_date'), status: text(row, 'status'), linkUrl: text(row, 'link_url') })),
     household: {
       plan: { id: text(householdPlanRow, 'id'), budgetCents: number(householdPlanRow, 'budget_cents'), allocatedSavingsCents: number(householdPlanRow, 'allocated_savings_cents'), includeInGeneral: bool(householdPlanRow, 'include_in_general'), targetDate: text(householdPlanRow, 'target_date'), housingType: text(householdPlanRow, 'housing_type') },

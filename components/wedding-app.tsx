@@ -35,6 +35,7 @@ import {
   WarningCircle,
 } from '@phosphor-icons/react';
 import { Badge } from '@/components/ui/badge';
+import { CoupleAccess } from '@/components/couple-access';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -72,7 +73,7 @@ import {
   type HouseholdAction,
 } from '@/components/household-view';
 import { GiftListView } from '@/components/gift-list-view';
-import type { WeddingSnapshot } from '@/lib/wedding-types';
+import type { Guest, WeddingSnapshot } from '@/lib/wedding-types';
 import { LunaPanel } from '@/components/luna-panel';
 import { PaletteView } from '@/components/palette-view';
 
@@ -90,6 +91,7 @@ type ActionName =
   | 'mark_payment_paid'
   | 'add_vendor'
   | 'add_guest'
+  | 'update_guest'
   | 'set_guest_rsvp'
   | 'add_task'
   | 'toggle_task'
@@ -193,6 +195,7 @@ export function WeddingApp({
   const [view, setView] = useState<View>('overview');
   const [search, setSearch] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingGuest, setEditingGuest] = useState<Guest | null>(null);
   const [saving, setSaving] = useState(false);
   const [dark, setDark] = useState(false);
   const [lunaOpen, setLunaOpen] = useState(false);
@@ -412,6 +415,7 @@ export function WeddingApp({
     try {
       await performAction(action, payload);
       setDialogOpen(false);
+      if (action === 'update_guest' || action === 'add_guest') setEditingGuest(null);
       onSuccess?.();
       toast.add({
         title: success,
@@ -488,6 +492,7 @@ export function WeddingApp({
               </div>
             </div>
             <div className="flex items-center gap-1">
+              <CoupleAccess />
               <Button
                 variant="ghost"
                 size="icon"
@@ -504,7 +509,7 @@ export function WeddingApp({
               </Button>
               {view !== 'household' && view !== 'gifts' && view !== 'palette' && (
                 <Button
-                  onClick={() => setDialogOpen(true)}
+                  onClick={() => { if (view === 'guests') setEditingGuest(null); setDialogOpen(true); }}
                   className="h-9 rounded-xl px-3"
                 >
                   <Plus size={17} weight="bold" />
@@ -558,7 +563,8 @@ export function WeddingApp({
               <Guests
                 data={data}
                 search={search}
-                onAdd={() => setDialogOpen(true)}
+                onAdd={() => { setEditingGuest(null); setDialogOpen(true); }}
+                onEdit={(guest) => { setEditingGuest(guest); setDialogOpen(true); }}
                 onRsvp={(id, rsvp) =>
                   submit('set_guest_rsvp', { id, rsvp }, 'Confirmação de presença atualizada')
                 }
@@ -605,27 +611,31 @@ export function WeddingApp({
         </Button>
       )}
       <LunaPanel open={lunaOpen} onClose={() => setLunaOpen(false)} onSnapshot={setData} />
-      <WeddingDateDialog
-        open={weddingDateDialogOpen}
-        currentDate={data.wedding.weddingDate}
-        saving={saving}
-        onOpenChange={setWeddingDateDialogOpen}
-        onSubmit={(weddingDate) =>
-          submit(
-            'update_wedding_date',
-            { weddingDate },
-            'Data do casamento atualizada',
-            () => setWeddingDateDialogOpen(false),
-          )
-        }
-      />
-      {view !== 'household' && view !== 'gifts' && view !== 'palette' && (
+      {weddingDateDialogOpen && (
+        <WeddingDateDialog
+          open={weddingDateDialogOpen}
+          currentDate={data.wedding.weddingDate}
+          saving={saving}
+          onOpenChange={setWeddingDateDialogOpen}
+          onSubmit={(weddingDate) =>
+            submit(
+              'update_wedding_date',
+              { weddingDate },
+              'Data do casamento atualizada',
+              () => setWeddingDateDialogOpen(false),
+            )
+          }
+        />
+      )}
+      {dialogOpen && view !== 'household' && view !== 'gifts' && view !== 'palette' && (
         <AddDialog
+          key={view === 'guests' ? (editingGuest?.id ?? 'new-guest') : view}
           view={view}
           open={dialogOpen}
           saving={saving}
           data={data}
-          onOpenChange={setDialogOpen}
+          editingGuest={editingGuest}
+          onOpenChange={(open) => { setDialogOpen(open); if (!open) setEditingGuest(null); }}
           onSubmit={submit}
         />
       )}
@@ -1272,15 +1282,17 @@ function Guests({
   data,
   search,
   onAdd,
+  onEdit,
   onRsvp,
 }: {
   data: WeddingSnapshot;
   search: string;
   onAdd: () => void;
+  onEdit: (guest: Guest) => void;
   onRsvp: (id: string, rsvp: string) => void;
 }) {
   const items = data.guests.filter((item) =>
-    `${item.fullName} ${item.groupName}`
+    `${item.fullName} ${item.groupName} ${item.groupType} ${item.role} ${item.ageGroup}`
       .toLowerCase()
       .includes(search.toLowerCase()),
   );
@@ -1313,9 +1325,11 @@ function Guests({
               <TableRow>
                 <TableHead>Nome</TableHead>
                 <TableHead>Grupo</TableHead>
+                <TableHead>Papel</TableHead>
                 <TableHead>Lado</TableHead>
                 <TableHead>Faixa</TableHead>
                 <TableHead className="text-right">Confirmação de presença</TableHead>
+                <TableHead className="text-right">Editar</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -1328,8 +1342,9 @@ function Guests({
                     </span>
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {item.groupName || '—'}
+                    {item.groupType === 'individual' ? (item.groupName || '—') : `${item.groupType === 'família' ? 'Família' : item.groupType === 'casal' ? 'Casal' : 'Grupo'}: ${item.groupName}`}
                   </TableCell>
+                  <TableCell className="capitalize">{item.role}</TableCell>
                   <TableCell>{item.side}</TableCell>
                   <TableCell className="capitalize">{item.ageGroup}</TableCell>
                   <TableCell>
@@ -1355,6 +1370,11 @@ function Guests({
                         Talvez
                       </NativeSelectOption>
                     </NativeSelect>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button type="button" variant="ghost" size="icon" aria-label={`Editar ${item.fullName}`} onClick={() => onEdit(item)}>
+                      <PencilSimple size={17} />
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))}
@@ -1541,6 +1561,7 @@ function AddDialog({
   open,
   saving,
   data,
+  editingGuest,
   onOpenChange,
   onSubmit,
 }: {
@@ -1548,9 +1569,11 @@ function AddDialog({
   open: boolean;
   saving: boolean;
   data: WeddingSnapshot;
+  editingGuest: Guest | null;
   onOpenChange: (value: boolean) => void;
   onSubmit: (action: ActionName, payload: unknown, success: string) => void;
 }) {
+  const [groupType, setGroupType] = useState(editingGuest?.groupType ?? 'individual');
   const kind = view === 'overview' || view === 'household' || view === 'gifts' || view === 'palette' ? 'checklist' : view;
   const titles = {
     finance: ['Novo pagamento', 'Registre um vencimento real.'],
@@ -1558,7 +1581,9 @@ function AddDialog({
     guests: ['Novo convidado', 'Inclua a pessoa e o status do convite.'],
     checklist: ['Nova tarefa', 'Defina responsabilidade, prioridade e prazo.'],
   } as const;
-  const [title, description] = titles[kind as keyof typeof titles];
+  const [title, description] = editingGuest && kind === 'guests'
+    ? ['Editar convidado', 'Atualize os dados e a relação com os demais convidados.']
+    : titles[kind as keyof typeof titles];
   const baseInput = 'h-10';
   const label = 'grid gap-2 text-sm font-medium';
   const submitForm = (event: React.FormEvent<HTMLFormElement>) => {
@@ -1595,16 +1620,19 @@ function AddDialog({
       );
     if (kind === 'guests')
       onSubmit(
-        'add_guest',
+        editingGuest ? 'update_guest' : 'add_guest',
         {
+          ...(editingGuest ? { id: editingGuest.id } : {}),
           fullName: form.get('fullName'),
           side: form.get('side'),
           groupName: form.get('groupName'),
+          groupType: form.get('groupType'),
+          role: form.get('role'),
           ageGroup: form.get('ageGroup'),
           rsvp: form.get('rsvp'),
           linkUrl: form.get('linkUrl'),
         },
-        'Convidado adicionado',
+        editingGuest ? 'Convidado atualizado' : 'Convidado adicionado',
       );
     if (kind === 'checklist')
       onSubmit(
@@ -1622,7 +1650,7 @@ function AddDialog({
   };
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[480px]">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-[480px]">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
@@ -1786,22 +1814,44 @@ function AddDialog({
                 <Input
                   name="fullName"
                   required
+                  defaultValue={editingGuest?.fullName}
                   placeholder="Nome e sobrenome"
                   className={baseInput}
                 />
               </label>
+              <div className="grid grid-cols-2 gap-3">
+                <label className={label}>
+                  Papel
+                  <NativeSelect name="role" className="w-full" defaultValue={editingGuest?.role ?? 'convidado'}>
+                    <NativeSelectOption value="convidado">Convidado</NativeSelectOption>
+                    <NativeSelectOption value="padrinho">Padrinho</NativeSelectOption>
+                    <NativeSelectOption value="madrinha">Madrinha</NativeSelectOption>
+                  </NativeSelect>
+                </label>
+                <label className={label}>
+                  Vínculo
+                  <NativeSelect name="groupType" className="w-full" value={groupType} onValueChange={(value) => setGroupType(value ?? 'individual')}>
+                    <NativeSelectOption value="individual">Individual</NativeSelectOption>
+                    <NativeSelectOption value="casal">Casal</NativeSelectOption>
+                    <NativeSelectOption value="família">Família</NativeSelectOption>
+                    <NativeSelectOption value="outro">Outro grupo</NativeSelectOption>
+                  </NativeSelect>
+                </label>
+              </div>
               <label className={label}>
-                Família ou grupo
+                Nome do casal, família ou grupo
                 <Input
                   name="groupName"
-                  placeholder="Ex.: Família Ribeiro"
+                  required={groupType !== 'individual'}
+                  defaultValue={editingGuest?.groupName}
+                  placeholder="Use o mesmo nome para pessoas do mesmo grupo"
                   className={baseInput}
                 />
               </label>
               <div className="grid grid-cols-2 gap-3">
                 <label className={label}>
                   Lado
-                  <NativeSelect name="side" className="w-full">
+                  <NativeSelect name="side" className="w-full" defaultValue={editingGuest?.side ?? 'Pessoa 1'}>
                     <NativeSelectOption>Pessoa 1</NativeSelectOption>
                     <NativeSelectOption>Pessoa 2</NativeSelectOption>
                     <NativeSelectOption>Ambos</NativeSelectOption>
@@ -1809,7 +1859,7 @@ function AddDialog({
                 </label>
                 <label className={label}>
                   Faixa
-                  <NativeSelect name="ageGroup" className="w-full">
+                  <NativeSelect name="ageGroup" className="w-full" defaultValue={editingGuest?.ageGroup ?? 'adulto'}>
                     <NativeSelectOption value="adulto">
                       Adulto
                     </NativeSelectOption>
@@ -1825,7 +1875,7 @@ function AddDialog({
               </div>
               <label className={label}>
                 Confirmação de presença
-                <NativeSelect name="rsvp" className="w-full">
+                <NativeSelect name="rsvp" className="w-full" defaultValue={editingGuest?.rsvp ?? 'ainda não convidado'}>
                   <NativeSelectOption value="ainda não convidado">
                     Ainda não convidado
                   </NativeSelectOption>
@@ -1835,10 +1885,14 @@ function AddDialog({
                   <NativeSelectOption value="confirmado">
                     Confirmado
                   </NativeSelectOption>
+                  <NativeSelectOption value="não irá">Não irá</NativeSelectOption>
                   <NativeSelectOption value="talvez">Talvez</NativeSelectOption>
                 </NativeSelect>
               </label>
-              <LinkInput label="Convite, perfil ou outro link" />
+              <label className={label}>
+                Convite, perfil ou outro link
+                <Input name="linkUrl" type="url" defaultValue={editingGuest?.linkUrl} placeholder="https://" className={baseInput} />
+              </label>
             </>
           )}
           {kind === 'checklist' && (

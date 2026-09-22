@@ -24,6 +24,7 @@ export const users = pgTable(
     id: text('id').primaryKey(),
     email: text('email').notNull(),
     displayName: text('display_name').notNull(),
+    passwordHash: text('password_hash'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -114,6 +115,36 @@ export const weddingMembers = pgTable(
       table.userId,
     ),
     index('idx_wedding_members_user_id').on(table.userId),
+    uniqueIndex('idx_wedding_members_one_workspace').on(table.userId),
+    uniqueIndex('idx_wedding_members_one_partner').on(table.weddingId).where(sql`${table.role} = 'partner'`),
+  ],
+);
+
+export const securityRateLimits = pgTable(
+  'security_rate_limits',
+  {
+    key: text('key').primaryKey(),
+    windowStart: timestamp('window_start', { withTimezone: true, mode: 'string' }).notNull(),
+    count: integer('count').notNull(),
+  },
+  (table) => [index('idx_security_rate_limits_window_start').on(table.windowStart)],
+);
+
+export const weddingInvites = pgTable(
+  'wedding_invites',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    weddingId: uuid('wedding_id').notNull().references(() => weddings.id, { onDelete: 'cascade' }),
+    invitedBy: text('invited_by').notNull().references(() => users.id),
+    invitedEmail: text('invited_email').notNull(),
+    tokenHash: text('token_hash').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'string' }).notNull(),
+    acceptedAt: timestamp('accepted_at', { withTimezone: true, mode: 'string' }),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('idx_wedding_invites_token_hash').on(table.tokenHash),
+    index('idx_wedding_invites_wedding').on(table.weddingId),
   ],
 );
 
@@ -206,6 +237,8 @@ export const guests = pgTable(
     fullName: text('full_name').notNull(),
     side: text('side').notNull(),
     groupName: text('group_name').notNull().default(''),
+    groupType: text('group_type').notNull().default('individual'),
+    role: text('role').notNull().default('convidado'),
     ageGroup: text('age_group').notNull(),
     rsvp: text('rsvp').notNull(),
     linkUrl: text('link_url').notNull().default(''),

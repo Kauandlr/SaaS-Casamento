@@ -9,11 +9,14 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
+import {
+  Popover, PopoverContent, PopoverDescription, PopoverHeader, PopoverTitle, PopoverTrigger,
+} from '@/components/ui/popover';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/toast';
 import type { HouseholdItem, WeddingSnapshot } from '@/lib/wedding-types';
 
-type GiftAction = 'add_household_item' | 'update_gift_list_item' | 'remove_gift_list_item' | 'record_household_gift';
+type GiftAction = 'add_household_item' | 'update_gift_list_item' | 'remove_gift_list_item' | 'record_household_gift' | 'add_household_category';
 type DialogMode = 'add' | 'edit' | 'received' | 'remove' | null;
 type Filter = 'all' | 'available' | 'received';
 
@@ -36,6 +39,10 @@ export function GiftListView({ data, search, onAction }: {
   const [mode, setMode] = useState<DialogMode>(null);
   const [selected, setSelected] = useState<HouseholdItem | null>(null);
   const [saving, setSaving] = useState(false);
+  const [categoryId, setCategoryId] = useState('');
+  const [categoryOpen, setCategoryOpen] = useState(false);
+  const [categoryName, setCategoryName] = useState('');
+  const [categorySaving, setCategorySaving] = useState(false);
   const items = data.household.items.filter((item) =>
     item.status !== 'removido da lista' && ['lista de presentes', 'ambos'].includes(item.giftIntent));
   const received = data.household.gifts
@@ -52,7 +59,30 @@ export function GiftListView({ data, search, onAction }: {
   });
   const open = (next: DialogMode, item: HouseholdItem | null = null) => {
     setSelected(item);
+    setCategoryId(item?.categoryId ?? '');
+    setCategoryOpen(false);
+    setCategoryName('');
     setMode(next);
+  };
+  const addCategory = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const name = categoryName.trim();
+    if (name.length < 2 || categorySaving) return;
+    setCategorySaving(true);
+    try {
+      const snapshot = await onAction('add_household_category', { name });
+      const existingIds = new Set(data.household.categories.map((category) => category.id));
+      const created = snapshot.household.categories.find((category) => !existingIds.has(category.id));
+      if (created) setCategoryId(created.id);
+      setCategoryOpen(false);
+      setCategoryName('');
+      toast.add({ title: 'Categoria adicionada', type: 'success' });
+    } catch (error) {
+      toast.add({ title: 'Não foi possível adicionar a categoria', description: error instanceof Error ? error.message : 'Tente novamente.', type: 'error' });
+    } finally {
+      setCategorySaving(false);
+    }
   };
   const run = async (action: GiftAction, payload: unknown, success: string) => {
     setSaving(true);
@@ -168,7 +198,7 @@ export function GiftListView({ data, search, onAction }: {
         </div>
       )}
 
-      <Dialog open={mode !== null} onOpenChange={(isOpen) => { if (!isOpen && !saving) setMode(null); }}>
+      {mode !== null && <Dialog open onOpenChange={(isOpen) => { if (!isOpen && !saving) setMode(null); }}>
         <DialogContent key={`${mode}-${selected?.id ?? ''}`} className="max-h-[88dvh] overflow-y-auto sm:max-w-[520px]">
           <DialogHeader>
             <DialogTitle>{mode === 'add' ? 'Adicionar presente' : mode === 'edit' ? 'Editar presente' : mode === 'received' ? 'Registrar presente recebido' : 'Retirar da lista'}</DialogTitle>
@@ -177,8 +207,43 @@ export function GiftListView({ data, search, onAction }: {
           <form onSubmit={submit} className="grid gap-4">
             {(mode === 'add' || mode === 'edit') && <>
               <label className="grid gap-1.5 text-sm font-medium">Nome do presente<Input name="name" required minLength={2} maxLength={120} defaultValue={selected?.name ?? ''} placeholder="Ex.: Jogo de jantar" /></label>
-              <div className="grid grid-cols-2 gap-3">
-                <label className="grid gap-1.5 text-sm font-medium">Categoria<NativeSelect name="categoryId" defaultValue={selected?.categoryId ?? ''}><NativeSelectOption value="">Sem categoria</NativeSelectOption>{data.household.categories.map((category) => <NativeSelectOption key={category.id} value={category.id}>{category.name}</NativeSelectOption>)}</NativeSelect></label>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="grid min-w-0 gap-1.5 text-sm font-medium">
+                  <label htmlFor="gift-category">Categoria</label>
+                  <div className="flex min-w-0 gap-2">
+                    <NativeSelect
+                      id="gift-category"
+                      name="categoryId"
+                      value={categoryId}
+                      onValueChange={(value) => setCategoryId(value ?? '')}
+                      className="min-w-0 flex-1 [&_[data-slot=select-trigger]]:w-full"
+                    >
+                      <NativeSelectOption value="">Sem categoria</NativeSelectOption>
+                      {data.household.categories.map((category) => (
+                        <NativeSelectOption key={category.id} value={category.id}>{category.name}</NativeSelectOption>
+                      ))}
+                    </NativeSelect>
+                    <Popover open={categoryOpen} onOpenChange={setCategoryOpen}>
+                      <PopoverTrigger render={<Button type="button" variant="outline" size="icon" aria-label="Adicionar categoria" />}><Plus size={16} weight="bold" /></PopoverTrigger>
+                      <PopoverContent side="top" align="end" sideOffset={8} className="w-72 gap-3 p-4">
+                        <PopoverHeader>
+                          <PopoverTitle>Nova categoria</PopoverTitle>
+                          <PopoverDescription>Organize os presentes por tipo.</PopoverDescription>
+                        </PopoverHeader>
+                        <form onSubmit={addCategory} className="grid gap-3">
+                          <label className="grid gap-1.5 font-medium">
+                            Nome da categoria
+                            <Input autoFocus value={categoryName} onChange={(event) => setCategoryName(event.target.value)} required minLength={2} maxLength={60} placeholder="Ex.: Cozinha" />
+                          </label>
+                          <div className="flex justify-end gap-2">
+                            <Button type="button" variant="ghost" onClick={() => setCategoryOpen(false)} disabled={categorySaving}>Cancelar</Button>
+                            <Button type="submit" disabled={categorySaving || categoryName.trim().length < 2}>{categorySaving ? 'Salvando…' : 'Adicionar'}</Button>
+                          </div>
+                        </form>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </div>
                 <label className="grid gap-1.5 text-sm font-medium">Quantidade<Input name="quantity" type="number" min={Math.max(1, selected?.acquiredQuantity ?? 1)} max={999} required defaultValue={selected?.desiredQuantity ?? 1} /></label>
               </div>
               <label className="grid gap-1.5 text-sm font-medium">Valor estimado por unidade (R$)<Input name="price" inputMode="decimal" defaultValue={selected?.estimatedUnitCents ? (selected.estimatedUnitCents / 100).toFixed(2).replace('.', ',') : ''} placeholder="Opcional" /></label>
@@ -201,7 +266,7 @@ export function GiftListView({ data, search, onAction }: {
             <DialogFooter><Button type="button" variant="outline" onClick={() => setMode(null)} disabled={saving}>Cancelar</Button><Button type="submit" disabled={saving}>{saving ? 'Salvando…' : mode === 'remove' ? 'Retirar da lista' : 'Salvar'}</Button></DialogFooter>
           </form>
         </DialogContent>
-      </Dialog>
+      </Dialog>}
     </div>
   );
 }

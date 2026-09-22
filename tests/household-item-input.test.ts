@@ -61,3 +61,12 @@ void test('still rejects invalid values instead of silently changing them', () =
 
   assert.equal(result.success, false);
 });
+
+void test('rejects executable product links', () => {
+  const result = householdItemInputSchema.safeParse({
+    name: 'Produto',
+    productUrl: 'javascript:alert(1)',
+  });
+
+  assert.equal(result.success, false);
+});

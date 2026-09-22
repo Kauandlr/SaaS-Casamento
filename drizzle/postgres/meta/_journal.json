@@ -43,6 +43,34 @@
       "when": 1789750000001,
       "tag": "0005_ensure_wedding_palette",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790035200000,
+      "tag": "0006_couple_accounts",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790035200001,
+      "tag": "0007_guest_relationships",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790035200002,
+      "tag": "0008_targeted_wedding_invites",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790080800000,
+      "tag": "0009_security_rate_limits",
+      "breakpoints": true
     }
   ]
 }

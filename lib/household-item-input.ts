@@ -30,7 +30,10 @@ export const householdItemInputSchema = z.object({
   brand: z.string().trim().max(80).default(''),
   model: z.string().trim().max(100).default(''),
   store: z.string().trim().max(100).default(''),
-  productUrl: z.string().trim().pipe(z.url()).or(z.literal('')).default(''),
+  productUrl: z.string().trim().max(2048).refine(
+    (value) => value === '' || /^https?:\/\//i.test(value),
+    'Informe um link iniciado por http:// ou https://.',
+  ).default(''),
   responsible: z.string().trim().min(2).max(60).default('Casal'),
   giftIntent: z
     .enum(['comprar', 'lista de presentes', 'ambos', 'a decidir'])
