@@ -4,8 +4,7 @@ import vinext from 'vinext';
 import { defineConfig, loadEnv } from 'vite';
 import hostingConfig from './.openai/hosting.json';
 
-const SITE_CREATOR_PLACEHOLDER_DATABASE_ID =
-  '00000000-0000-4000-8000-000000000000';
+const SITE_CREATOR_PLACEHOLDER_DATABASE_ID = '00000000-0000-4000-8000-000000000000';
 
 const { d1, r2 } = hostingConfig;
 
@@ -24,6 +23,9 @@ export default defineConfig(async ({ mode }) => {
         AUTH_EMAIL: values.AUTH_EMAIL,
         AUTH_DISPLAY_NAME: values.AUTH_DISPLAY_NAME,
         AUTH_PASSWORD_HASH: values.AUTH_PASSWORD_HASH,
+        // Temporary compatibility for installations that have not migrated
+        // their local secret to AUTH_PASSWORD_HASH yet.
+        AUTH_PASSWORD: values.AUTH_PASSWORD,
         OPENAI_API_KEY: values.OPENAI_API_KEY,
         OPENAI_MODEL: values.OPENAI_MODEL ?? 'gpt-5.6-luna',
         OPENAI_BASE_URL: values.OPENAI_BASE_URL,
@@ -43,8 +45,7 @@ export default defineConfig(async ({ mode }) => {
         binding: 'HYPERDRIVE',
         id: SITE_CREATOR_PLACEHOLDER_DATABASE_ID,
         localConnectionString:
-          values.DATABASE_URL ??
-          'postgres://vinculo:vinculo@127.0.0.1:5437/vinculo',
+          values.DATABASE_URL ?? 'postgres://vinculo:vinculo@127.0.0.1:5437/vinculo',
       },
     ],
     r2_buckets: r2

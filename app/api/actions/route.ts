@@ -1,188 +1,34 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getCurrentUser, isSameOrigin } from '@/lib/auth';
+import { getCurrentUser, isSameOrigin, type AuthUser } from '@/lib/auth';
 import { db, getSnapshot, id, now, requireWeddingId } from '@/lib/wedding-data';
-import { closeDb } from '@/db';
+import { withRequestDb } from '@/db';
+import { householdItemInputSchema } from '@/lib/household-item-input';
+import { readWeddingPalettes } from '@/lib/wedding-palettes';
+import {
+  explainActionValidationError,
+  giftListItemSchema,
+  guestSchema,
+  householdCategorySchema,
+  householdGiftSchema,
+  householdPlanSchema,
+  householdPurchaseSchema,
+  householdTaskSchema,
+  idSchema,
+  paletteSchema,
+  palettesSchema,
+  paymentSchema,
+  rsvpSchema,
+  taskSchema,
+  vendorSchema,
+  weddingDateSchema,
+} from '@/lib/wedding-action-input';
 
-const linkUrlSchema = z
-  .string()
-  .trim()
-  .max(2048)
-  .refine(
-    (value) => value === '' || /^https?:\/\//i.test(value),
-    'Informe um link iniciado por http:// ou https://.',
-  )
-  .default('');
-
-const paymentSchema = z.object({
-  title: z.string().trim().min(2).max(100),
-  vendorName: z.string().trim().max(100).default(''),
-  categoryId: z.uuid().nullable(),
-  amountCents: z.number().int().positive().max(100_000_000),
-  dueDate: z.iso.date(),
-  payer: z.string().trim().min(2).max(40),
-  linkUrl: linkUrlSchema,
-});
-
-const vendorSchema = z.object({
-  name: z.string().trim().min(2).max(100),
-  company: z.string().trim().max(100).default(''),
-  category: z.string().trim().min(2).max(60),
-  phone: z.string().trim().max(30).default(''),
-  email: z.string().trim().pipe(z.email()).or(z.literal('')),
-  linkUrl: linkUrlSchema,
-  quotedCents: z.number().int().nonnegative().max(100_000_000),
-  status: z.enum(['pesquisando', 'favorito', 'negociando', 'contratado']),
-});
-
-const guestSchema = z.object({
-  fullName: z.string().trim().min(2).max(120),
-  side: z.enum(['Pessoa 1', 'Pessoa 2', 'Ambos']),
-  groupName: z.string().trim().max(100).default(''),
-  ageGroup: z.enum(['adulto', 'adolescente', 'criança', 'bebê']),
-  rsvp: z.enum([
-    'ainda não convidado',
-    'aguardando',
-    'confirmado',
-    'não irá',
-    'talvez',
-  ]),
-  linkUrl: linkUrlSchema,
-});
-
-const taskSchema = z.object({
-  title: z.string().trim().min(2).max(140),
-  category: z.string().trim().min(2).max(60),
-  responsible: z.string().trim().min(2).max(60),
-  priority: z.enum(['essencial', 'importante', 'opcional', 'dispensável']),
-  dueDate: z.iso.date(),
-  linkUrl: linkUrlSchema,
-});
-
-const idSchema = z.object({ id: z.uuid() });
-const rsvpSchema = idSchema.extend({
-  rsvp: z.enum([
-    'ainda não convidado',
-    'aguardando',
-    'confirmado',
-    'não irá',
-    'talvez',
-  ]),
-});
-
-const householdItemSchema = z.object({
-  name: z.string().trim().min(2).max(120),
-  categoryId: z.uuid().nullable(),
-  desiredQuantity: z.number().int().positive().max(999),
-  priority: z.enum(['essencial', 'importante', 'pode esperar', 'opcional']),
-  status: z.enum([
-    'precisamos',
-    'pesquisando',
-    'escolhido',
-    'comprado',
-    'recebido de presente',
-    'já possuímos',
-    'não comprar agora',
-    'removido da lista',
-  ]),
-  estimatedUnitCents: z.number().int().nonnegative().max(100_000_000),
-  minPriceCents: z.number().int().nonnegative().max(100_000_000),
-  maxPriceCents: z.number().int().nonnegative().max(100_000_000),
-  brand: z.string().trim().max(80).default(''),
-  model: z.string().trim().max(100).default(''),
-  store: z.string().trim().max(100).default(''),
-  productUrl: z.string().trim().pipe(z.url()).or(z.literal('')),
-  responsible: z.string().trim().min(2).max(60),
-  giftIntent: z.enum(['comprar', 'lista de presentes', 'ambos', 'a decidir']),
-  purchaseTiming: z.enum([
-    'comprar agora',
-    'próximos meses',
-    'antes do casamento',
-    'comprar próximo ao casamento',
-    'depois do casamento',
-  ]),
-  desiredDate: z.iso.date().nullable(),
-  notes: z.string().trim().max(800).default(''),
-});
-
-const householdPlanSchema = z.object({
-  budgetCents: z.number().int().nonnegative().max(100_000_000),
-  allocatedSavingsCents: z.number().int().nonnegative().max(100_000_000),
-  includeInGeneral: z.boolean(),
-  targetDate: z.iso.date(),
-  housingType: z.enum([
-    'imóvel próprio',
-    'aluguel',
-    'morar com familiares temporariamente',
-    'ainda não definido',
-  ]),
-});
-
-const householdPurchaseSchema = idSchema.extend({
-  quantity: z.number().int().positive().max(999),
-  amountCents: z.number().int().nonnegative().max(100_000_000),
-  paymentMethod: z.enum(['à vista', 'entrada', 'parcelado']),
-  installments: z.number().int().positive().max(48),
-  purchasedAt: z.iso.date(),
-});
-
-const householdGiftSchema = idSchema.extend({
-  quantity: z.number().int().positive().max(999),
-  giver: z.string().trim().min(2).max(120),
-  giftedAt: z.iso.date(),
-  approximateValueCents: z.number().int().nonnegative().max(100_000_000),
-  notes: z.string().trim().max(500).default(''),
-});
-
-const householdTaskSchema = z.object({
-  title: z.string().trim().min(2).max(140),
-  responsible: z.string().trim().min(2).max(60),
-  dueDate: z.iso.date(),
-  linkUrl: linkUrlSchema,
-});
-
-const householdCategorySchema = z.object({
-  name: z.string().trim().min(2).max(60),
-});
-
-const giftListItemSchema = idSchema.extend({
-  name: z.string().trim().min(2).max(120),
-  categoryId: z.uuid().nullable(),
-  desiredQuantity: z.number().int().positive().max(999),
-  estimatedUnitCents: z.number().int().nonnegative().max(100_000_000),
-  productUrl: linkUrlSchema,
-  notes: z.string().trim().max(800).default(''),
-});
-
-const paletteSchema = z.object({
-  id: z.string().min(1).max(64),
-  name: z.string().trim().min(2).max(80),
-  colors: z.array(z.object({
-    name: z.string().trim().min(2).max(40),
-    hex: z.string().regex(/^#[0-9a-fA-F]{6}$/),
-  })).min(2).max(8),
-});
-const palettesSchema = z.array(paletteSchema).max(20).refine(
-  (palettes) => new Set(palettes.map((palette) => palette.id)).size === palettes.length,
-  'Cada paleta precisa ter um identificador único.',
-);
-
-const weddingDateSchema = z.object({
-  weddingDate: z.iso.date(),
-});
-
-export async function POST(request: Request) {
-  if (!isSameOrigin(request))
-    return NextResponse.json({ error: 'Origem inválida.' }, { status: 403 });
-  const user = await getCurrentUser();
-  if (!user)
-    return NextResponse.json({ error: 'Sessão necessária.' }, { status: 401 });
-
+export async function executeWeddingAction(
+  user: AuthUser,
+  body: { action?: string; payload?: unknown },
+) {
   try {
-    const body = (await request.json()) as {
-      action?: string;
-      payload?: unknown;
-    };
     const weddingId = await requireWeddingId(user.userId);
     const createdAt = now();
 
@@ -207,6 +53,22 @@ export async function POST(request: Request) {
               createdAt,
             ),
         ]);
+        break;
+      }
+      case 'save_wedding_palette': {
+        const payload = paletteSchema.parse(body.payload);
+        const row = await db()
+          .prepare('SELECT palette FROM weddings WHERE id = ?')
+          .bind(weddingId)
+          .first<Record<string, unknown>>();
+        const palettes = palettesSchema.parse([
+          ...readWeddingPalettes(row?.palette),
+          { id: id(), ...payload },
+        ]);
+        await db()
+          .prepare('UPDATE weddings SET palette = ?::jsonb, updated_at = ? WHERE id = ?')
+          .bind(JSON.stringify(palettes), createdAt, weddingId)
+          .run();
         break;
       }
       case 'save_wedding_palettes': {
@@ -244,15 +106,7 @@ export async function POST(request: Request) {
             .prepare(`INSERT INTO activity_log (
               id, wedding_id, user_id, action, entity_type, entity_id, created_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?)`)
-            .bind(
-              id(),
-              weddingId,
-              user.userId,
-              'Pagamento criado',
-              'payment',
-              entityId,
-              createdAt,
-            ),
+            .bind(id(), weddingId, user.userId, 'Pagamento criado', 'payment', entityId, createdAt),
         ];
         if (payload.categoryId) {
           statements.push(
@@ -275,10 +129,7 @@ export async function POST(request: Request) {
           .bind(paymentId, weddingId)
           .first<Record<string, unknown>>();
         if (!payment)
-          return NextResponse.json(
-            { error: 'Pagamento não encontrado.' },
-            { status: 404 },
-          );
+          return NextResponse.json({ error: 'Pagamento não encontrado.' }, { status: 404 });
         if (payment.status !== 'pago') {
           const statements = [
             db()
@@ -306,11 +157,7 @@ export async function POST(request: Request) {
                 .prepare(
                   'UPDATE budget_categories SET paid_cents = paid_cents + ? WHERE id = ? AND wedding_id = ?',
                 )
-                .bind(
-                  Number(payment.amount_cents ?? 0),
-                  payment.category_id,
-                  weddingId,
-                ),
+                .bind(Number(payment.amount_cents ?? 0), payment.category_id, weddingId),
             );
           }
           await db().batch(statements);
@@ -399,10 +246,7 @@ export async function POST(request: Request) {
           .bind(payload.rsvp, payload.id, weddingId)
           .run();
         if (!result.meta.changes)
-          return NextResponse.json(
-            { error: 'Convidado não encontrado.' },
-            { status: 404 },
-          );
+          return NextResponse.json({ error: 'Convidado não encontrado.' }, { status: 404 });
         break;
       }
       case 'add_task': {
@@ -445,47 +289,31 @@ export async function POST(request: Request) {
       case 'toggle_task': {
         const { id: taskId } = idSchema.parse(body.payload);
         const task = await db()
-          .prepare(
-            'SELECT status FROM checklist_items WHERE id = ? AND wedding_id = ?',
-          )
+          .prepare('SELECT status FROM checklist_items WHERE id = ? AND wedding_id = ?')
           .bind(taskId, weddingId)
           .first<Record<string, unknown>>();
-        if (!task)
-          return NextResponse.json(
-            { error: 'Tarefa não encontrada.' },
-            { status: 404 },
-          );
-        const nextStatus =
-          task.status === 'concluído' ? 'pendente' : 'concluído';
+        if (!task) return NextResponse.json({ error: 'Tarefa não encontrada.' }, { status: 404 });
+        const nextStatus = task.status === 'concluído' ? 'pendente' : 'concluído';
         await db()
-          .prepare(
-            'UPDATE checklist_items SET status = ? WHERE id = ? AND wedding_id = ?',
-          )
+          .prepare('UPDATE checklist_items SET status = ? WHERE id = ? AND wedding_id = ?')
           .bind(nextStatus, taskId, weddingId)
           .run();
         break;
       }
       case 'add_household_item': {
-        const payload = householdItemSchema.parse(body.payload);
+        const payload = householdItemInputSchema.parse(body.payload);
         if (payload.categoryId) {
           const category = await db()
-            .prepare(
-              'SELECT id FROM household_categories WHERE id = ? AND wedding_id = ?',
-            )
+            .prepare('SELECT id FROM household_categories WHERE id = ? AND wedding_id = ?')
             .bind(payload.categoryId, weddingId)
             .first();
           if (!category)
-            return NextResponse.json(
-              { error: 'Categoria não encontrada.' },
-              { status: 404 },
-            );
+            return NextResponse.json({ error: 'Categoria não encontrada.' }, { status: 404 });
         }
         const entityId = id();
-        const initialAcquired = [
-          'comprado',
-          'recebido de presente',
-          'já possuímos',
-        ].includes(payload.status)
+        const initialAcquired = ['comprado', 'recebido de presente', 'já possuímos'].includes(
+          payload.status,
+        )
           ? payload.desiredQuantity
           : 0;
         await db().batch([
@@ -584,17 +412,10 @@ export async function POST(request: Request) {
           )
           .bind(payload.id, weddingId)
           .first<Record<string, unknown>>();
-        if (!item)
-          return NextResponse.json(
-            { error: 'Item não encontrado.' },
-            { status: 404 },
-          );
+        if (!item) return NextResponse.json({ error: 'Item não encontrado.' }, { status: 404 });
         const purchaseId = id();
-        const nextQuantity =
-          Number(item.acquired_quantity ?? 0) + payload.quantity;
-        const installmentValue = Math.floor(
-          payload.amountCents / payload.installments,
-        );
+        const nextQuantity = Number(item.acquired_quantity ?? 0) + payload.quantity;
+        const installmentValue = Math.floor(payload.amountCents / payload.installments);
         const statements = [
           db()
             .prepare(`INSERT INTO household_purchases (
@@ -619,9 +440,7 @@ export async function POST(request: Request) {
             .bind(
               nextQuantity,
               payload.amountCents,
-              nextQuantity >= Number(item.desired_quantity ?? 1)
-                ? 'comprado'
-                : 'escolhido',
+              nextQuantity >= Number(item.desired_quantity ?? 1) ? 'comprado' : 'escolhido',
               payload.purchasedAt,
               createdAt,
               payload.id,
@@ -641,17 +460,12 @@ export async function POST(request: Request) {
               createdAt,
             ),
         ];
-        for (
-          let installment = 1;
-          installment <= payload.installments;
-          installment += 1
-        ) {
+        for (let installment = 1; installment <= payload.installments; installment += 1) {
           const due = new Date(`${payload.purchasedAt}T12:00:00Z`);
           due.setUTCMonth(due.getUTCMonth() + installment - 1);
           const amount =
             installment === payload.installments
-              ? payload.amountCents -
-                installmentValue * (payload.installments - 1)
+              ? payload.amountCents - installmentValue * (payload.installments - 1)
               : installmentValue;
           statements.push(
             db()
@@ -667,9 +481,7 @@ export async function POST(request: Request) {
                 installment,
                 amount,
                 due.toISOString().slice(0, 10),
-                installment === 1 && payload.paymentMethod === 'à vista'
-                  ? 'pago'
-                  : 'pendente',
+                installment === 1 && payload.paymentMethod === 'à vista' ? 'pago' : 'pendente',
                 installment === 1 && payload.paymentMethod === 'à vista'
                   ? payload.purchasedAt
                   : null,
@@ -696,8 +508,7 @@ export async function POST(request: Request) {
         if (Number(item.acquired_quantity ?? 0) + payload.quantity > Number(item.desired_quantity ?? 0))
           return NextResponse.json({ error: 'A quantidade supera o que ainda falta receber.' }, { status: 422 });
         const giftId = id();
-        const nextQuantity =
-          Number(item.acquired_quantity ?? 0) + payload.quantity;
+        const nextQuantity = Number(item.acquired_quantity ?? 0) + payload.quantity;
         await db().batch([
           db()
             .prepare(`INSERT INTO household_gifts (
@@ -719,13 +530,7 @@ export async function POST(request: Request) {
             .prepare(
               'UPDATE household_items SET acquired_quantity = ?, status = ?, updated_at = ? WHERE id = ? AND wedding_id = ?',
             )
-            .bind(
-              nextQuantity,
-              'recebido de presente',
-              createdAt,
-              payload.id,
-              weddingId,
-            ),
+            .bind(nextQuantity, 'recebido de presente', createdAt, payload.id, weddingId),
           db()
             .prepare(
               'INSERT INTO activity_log (id, wedding_id, user_id, action, entity_type, entity_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -782,25 +587,15 @@ export async function POST(request: Request) {
       case 'toggle_household_task': {
         const payload = idSchema.parse(body.payload);
         const task = await db()
-          .prepare(
-            'SELECT status FROM household_checklist_items WHERE id = ? AND wedding_id = ?',
-          )
+          .prepare('SELECT status FROM household_checklist_items WHERE id = ? AND wedding_id = ?')
           .bind(payload.id, weddingId)
           .first<Record<string, unknown>>();
-        if (!task)
-          return NextResponse.json(
-            { error: 'Tarefa não encontrada.' },
-            { status: 404 },
-          );
+        if (!task) return NextResponse.json({ error: 'Tarefa não encontrada.' }, { status: 404 });
         await db()
           .prepare(
             'UPDATE household_checklist_items SET status = ? WHERE id = ? AND wedding_id = ?',
           )
-          .bind(
-            task.status === 'concluído' ? 'pendente' : 'concluído',
-            payload.id,
-            weddingId,
-          )
+          .bind(task.status === 'concluído' ? 'pendente' : 'concluído', payload.id, weddingId)
           .run();
         break;
       }
@@ -816,13 +611,7 @@ export async function POST(request: Request) {
           .prepare(
             'INSERT INTO household_categories (id, wedding_id, name, position, created_at) VALUES (?, ?, ?, ?, ?)',
           )
-          .bind(
-            id(),
-            weddingId,
-            payload.name,
-            Number(last?.position ?? -1) + 1,
-            createdAt,
-          )
+          .bind(id(), weddingId, payload.name, Number(last?.position ?? -1) + 1, createdAt)
           .run();
         break;
       }
@@ -838,20 +627,36 @@ export async function POST(request: Request) {
     return NextResponse.json({ snapshot });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Revise os campos informados.' },
-        { status: 422 },
-      );
+      return NextResponse.json({ error: explainActionValidationError(error) }, { status: 422 });
     }
     console.error(
       'Wedding action failed',
       error instanceof Error ? error.message : 'unknown_error',
     );
-    return NextResponse.json(
-      { error: 'Não foi possível salvar agora.' },
-      { status: 500 },
-    );
-  } finally {
-    await closeDb();
+    return NextResponse.json({ error: 'Não foi possível salvar agora.' }, { status: 500 });
   }
+}
+
+export async function POST(request: Request) {
+  if (!isSameOrigin(request))
+    return NextResponse.json({ error: 'Origem inválida.' }, { status: 403 });
+
+  return withRequestDb(async () => {
+    try {
+      const user = await getCurrentUser();
+      if (!user) return NextResponse.json({ error: 'Sessão necessária.' }, { status: 401 });
+
+      const body = (await request.json()) as {
+        action?: string;
+        payload?: unknown;
+      };
+      return await executeWeddingAction(user, body);
+    } catch (error) {
+      console.error(
+        'Wedding action request failed',
+        error instanceof Error ? error.message : 'unknown_error',
+      );
+      return NextResponse.json({ error: 'Requisição inválida.' }, { status: 400 });
+    }
+  });
 }

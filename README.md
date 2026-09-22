@@ -23,7 +23,7 @@ npm run db:migrate
 npm run dev
 ```
 
-O PostgreSQL local fica na porta `5437`. Copie `.env.example`, defina a conta e gere a senha com `npm run auth:hash`. O primeiro acesso autenticado abre o onboarding do casamento; nenhum dado de exemplo é criado.
+O PostgreSQL local fica na porta `5437`. Copie `.env.example`, defina a conta, gere a senha com `npm run auth:hash` e salve a saída entre as aspas simples de `AUTH_PASSWORD_HASH` (elas preservam os caracteres `$` no Docker Compose). O primeiro acesso autenticado abre o onboarding do casamento; nenhum dado de exemplo é criado. `AUTH_PASSWORD` em texto puro continua aceito apenas para compatibilidade com instalações antigas e deve ser migrado.
 
 Validação:
 

@@ -133,6 +133,47 @@ textarea {
   -webkit-tap-highlight-color: transparent;
 }
 
+:where(
+  a[href],
+  button:not(:disabled),
+  summary,
+  select:not(:disabled),
+  label[for],
+  input:not(:disabled):is(
+      [type='button'],
+      [type='submit'],
+      [type='reset'],
+      [type='checkbox'],
+      [type='radio'],
+      [type='color'],
+      [type='file'],
+      [type='range']
+    ),
+  [role='button']:not([aria-disabled='true']),
+  [role='link']:not([aria-disabled='true']),
+  [role='menuitem']:not([aria-disabled='true']),
+  [role='menuitemcheckbox']:not([aria-disabled='true']),
+  [role='menuitemradio']:not([aria-disabled='true']),
+  [role='option']:not([aria-disabled='true']),
+  [role='tab']:not([aria-disabled='true']),
+  [role='checkbox']:not([aria-disabled='true']),
+  [role='radio']:not([aria-disabled='true']),
+  [role='switch']:not([aria-disabled='true']),
+  [role='combobox']:not([aria-disabled='true'])
+) {
+  cursor: pointer;
+}
+
+:where(
+  button:disabled,
+  select:disabled,
+  input:disabled,
+  [aria-disabled='true'],
+  [data-disabled]
+) {
+  cursor: not-allowed;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
