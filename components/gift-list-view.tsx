@@ -257,7 +257,7 @@ export function GiftListView({ data, search, onAction }: {
                 <label className="grid gap-1.5 text-sm font-medium">Quem presenteou<Input name="giver" minLength={2} maxLength={120} required placeholder="Nome ou família" /></label>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <label className="grid gap-1.5 text-sm font-medium">Data<Input name="giftedAt" type="date" defaultValue={new Date().toISOString().slice(0, 10)} required /></label>
+                <label className="grid gap-1.5 text-sm font-medium">Data do presente<Input name="giftedAt" type="date" defaultValue={new Date().toISOString().slice(0, 10)} required /></label>
                 <label className="grid gap-1.5 text-sm font-medium">Valor aproximado (R$)<Input name="value" inputMode="decimal" placeholder="Opcional" /></label>
               </div>
               <label className="grid gap-1.5 text-sm font-medium">Observações<Textarea name="notes" maxLength={500} /></label>

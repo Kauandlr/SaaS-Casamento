@@ -2,6 +2,7 @@ import type { PgPreparedStatement } from '@/db';
 import { getDb } from '@/db';
 import type { WeddingSnapshot } from './wedding-types';
 import { readWeddingPalettes } from './wedding-palettes';
+import { ensureGuestInvitationGroups, getGuestInvitations } from './guest-invitations';
 
 export type WorkspaceIdentity = {
   userId: string;
@@ -113,6 +114,7 @@ export async function createWorkspace(
 
 export async function getSnapshot(identity: WorkspaceIdentity): Promise<WeddingSnapshot> {
   const weddingId = await requireWeddingId(identity.userId);
+  const publicSlug = await ensureGuestInvitationGroups(weddingId);
   const [
     weddingRow,
     categoryRows,
@@ -126,6 +128,7 @@ export async function getSnapshot(identity: WorkspaceIdentity): Promise<WeddingS
     householdGiftRows,
     householdChecklistRows,
     householdPaymentRows,
+    guestInvitations,
   ] = await Promise.all([
     db().prepare('SELECT * FROM weddings WHERE id = ?').bind(weddingId).first<Row>(),
     rows(db().prepare('SELECT * FROM budget_categories WHERE wedding_id = ? ORDER BY position, name').bind(weddingId)),
@@ -139,6 +142,7 @@ export async function getSnapshot(identity: WorkspaceIdentity): Promise<WeddingS
     rows(db().prepare('SELECT * FROM household_gifts WHERE wedding_id = ? ORDER BY gifted_at DESC').bind(weddingId)),
     rows(db().prepare(`SELECT * FROM household_checklist_items WHERE wedding_id = ? ORDER BY CASE status WHEN 'concluído' THEN 1 ELSE 0 END, due_date`).bind(weddingId)),
     rows(db().prepare(`SELECT hp.*, hi.name AS item_name FROM household_payments hp JOIN household_items hi ON hi.id = hp.item_id WHERE hp.wedding_id = ? ORDER BY hp.due_date`).bind(weddingId)),
+    getGuestInvitations(weddingId),
   ]);
 
   if (!weddingRow || !householdPlanRow) throw new Error('Workspace não encontrado.');
@@ -151,12 +155,15 @@ export async function getSnapshot(identity: WorkspaceIdentity): Promise<WeddingS
       budgetCents: number(weddingRow, 'budget_cents'), savedCents: number(weddingRow, 'saved_cents'),
       monthlyCapacityCents: number(weddingRow, 'monthly_capacity_cents'),
       reservePercent: number(weddingRow, 'reserve_percent'), guestEstimate: number(weddingRow, 'guest_estimate'),
+      publicSlug,
+      whatsappMessageTemplate: text(weddingRow, 'whatsapp_message_template') || null,
       palettes: readWeddingPalettes(weddingRow.palette),
     },
     categories: categoryRows.map((row) => ({ id: text(row, 'id'), name: text(row, 'name'), plannedCents: number(row, 'planned_cents'), contractedCents: number(row, 'contracted_cents'), paidCents: number(row, 'paid_cents') })),
     payments: paymentRows.map((row) => ({ id: text(row, 'id'), title: text(row, 'title'), vendorName: text(row, 'vendor_name'), categoryId: text(row, 'category_id') || null, amountCents: number(row, 'amount_cents'), dueDate: text(row, 'due_date'), status: text(row, 'status'), payer: text(row, 'payer'), linkUrl: text(row, 'link_url') })),
     vendors: vendorRows.map((row) => ({ id: text(row, 'id'), name: text(row, 'name'), company: text(row, 'company'), category: text(row, 'category'), phone: text(row, 'phone'), email: text(row, 'email'), linkUrl: text(row, 'link_url'), quotedCents: number(row, 'quoted_cents'), status: text(row, 'status'), rating: number(row, 'rating'), favorite: bool(row, 'favorite') })),
-    guests: guestRows.map((row) => ({ id: text(row, 'id'), fullName: text(row, 'full_name'), side: text(row, 'side'), groupName: text(row, 'group_name'), groupType: text(row, 'group_type'), role: text(row, 'role'), ageGroup: text(row, 'age_group'), rsvp: text(row, 'rsvp'), linkUrl: text(row, 'link_url') })),
+    guests: guestRows.map((row) => ({ id: text(row, 'id'), invitationGroupId: text(row, 'invitation_group_id') || null, fullName: text(row, 'full_name'), side: text(row, 'side'), groupName: text(row, 'group_name'), groupType: text(row, 'group_type'), role: text(row, 'role'), ageGroup: text(row, 'age_group'), rsvp: text(row, 'rsvp'), linkUrl: text(row, 'link_url') })),
+    guestInvitations,
     checklist: checklistRows.map((row) => ({ id: text(row, 'id'), title: text(row, 'title'), category: text(row, 'category'), responsible: text(row, 'responsible'), priority: text(row, 'priority'), dueDate: text(row, 'due_date'), status: text(row, 'status'), linkUrl: text(row, 'link_url') })),
     household: {
       plan: { id: text(householdPlanRow, 'id'), budgetCents: number(householdPlanRow, 'budget_cents'), allocatedSavingsCents: number(householdPlanRow, 'allocated_savings_cents'), includeInGeneral: bool(householdPlanRow, 'include_in_general'), targetDate: text(householdPlanRow, 'target_date'), housingType: text(householdPlanRow, 'housing_type') },

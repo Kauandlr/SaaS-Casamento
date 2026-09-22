@@ -87,11 +87,16 @@ export const weddings = pgTable(
     monthlyCapacityCents: integer('monthly_capacity_cents').notNull().default(0),
     reservePercent: integer('reserve_percent').notNull().default(10),
     guestEstimate: integer('guest_estimate').notNull().default(0),
+    publicSlug: text('public_slug'),
+    whatsappMessageTemplate: text('whatsapp_message_template'),
     palette: jsonb('palette'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (table) => [uniqueIndex('idx_weddings_owner_user_id').on(table.ownerUserId)],
+  (table) => [
+    uniqueIndex('idx_weddings_owner_user_id').on(table.ownerUserId),
+    uniqueIndex('idx_weddings_public_slug').on(table.publicSlug),
+  ],
 );
 
 export const weddingMembers = pgTable(
@@ -227,6 +232,33 @@ export const vendors = pgTable(
   ],
 );
 
+export const guestInvitationGroups = pgTable(
+  'guest_invitation_groups',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    weddingId: uuid('wedding_id')
+      .notNull()
+      .references(() => weddings.id, { onDelete: 'cascade' }),
+    groupKey: text('group_key').notNull(),
+    name: text('name').notNull(),
+    type: text('type').notNull().default('individual'),
+    responsibleName: text('responsible_name').notNull(),
+    responsiblePhone: text('responsible_phone').notNull().default(''),
+    familyName: text('family_name').notNull().default(''),
+    customSalutation: text('custom_salutation').notNull().default(''),
+    additionalGuestLimit: integer('additional_guest_limit').notNull().default(0),
+    publicToken: text('public_token').notNull(),
+    lastSharedAt: timestamp('last_shared_at', { withTimezone: true, mode: 'string' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    uniqueIndex('idx_guest_invitation_groups_token').on(table.publicToken),
+    uniqueIndex('idx_guest_invitation_groups_wedding_key').on(table.weddingId, table.groupKey),
+    index('idx_guest_invitation_groups_wedding').on(table.weddingId),
+  ],
+);
+
 export const guests = pgTable(
   'guests',
   {
@@ -234,6 +266,9 @@ export const guests = pgTable(
     weddingId: uuid('wedding_id')
       .notNull()
       .references(() => weddings.id, { onDelete: 'cascade' }),
+    invitationGroupId: uuid('invitation_group_id').references(() => guestInvitationGroups.id, {
+      onDelete: 'set null',
+    }),
     fullName: text('full_name').notNull(),
     side: text('side').notNull(),
     groupName: text('group_name').notNull().default(''),
@@ -247,6 +282,45 @@ export const guests = pgTable(
   (table) => [
     index('idx_guests_wedding_rsvp').on(table.weddingId, table.rsvp),
     index('idx_guests_wedding_group').on(table.weddingId, table.groupName),
+    index('idx_guests_invitation_group').on(table.invitationGroupId),
+  ],
+);
+
+export const invitationCompanions = pgTable(
+  'invitation_companions',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    invitationGroupId: uuid('invitation_group_id')
+      .notNull()
+      .references(() => guestInvitationGroups.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    ageGroup: text('age_group').notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [index('idx_invitation_companions_group').on(table.invitationGroupId)],
+);
+
+export const invitationShareAttempts = pgTable(
+  'invitation_share_attempts',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    weddingId: uuid('wedding_id')
+      .notNull()
+      .references(() => weddings.id, { onDelete: 'cascade' }),
+    invitationGroupId: uuid('invitation_group_id').references(() => guestInvitationGroups.id, {
+      onDelete: 'set null',
+    }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id),
+    kind: text('kind').notNull(),
+    channel: text('channel').notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    index('idx_invitation_share_attempts_wedding').on(table.weddingId, table.createdAt),
+    index('idx_invitation_share_attempts_group').on(table.invitationGroupId),
   ],
 );
 

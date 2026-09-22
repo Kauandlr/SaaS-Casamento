@@ -34,6 +34,7 @@ export type Vendor = {
 
 export type Guest = {
   id: string;
+  invitationGroupId: string | null;
   fullName: string;
   side: string;
   groupName: string;
@@ -42,6 +43,22 @@ export type Guest = {
   ageGroup: string;
   rsvp: string;
   linkUrl: string;
+};
+
+export type InvitationKind = 'individual' | 'casal' | 'familia' | 'personalizado';
+
+export type GuestInvitation = {
+  id: string;
+  name: string;
+  type: InvitationKind;
+  responsibleName: string;
+  responsiblePhone: string;
+  familyName: string;
+  customSalutation: string;
+  additionalGuestLimit: number;
+  token: string;
+  lastSharedAt: string | null;
+  guestIds: string[];
 };
 
 export type ChecklistItem = {
@@ -141,12 +158,15 @@ export type WeddingSnapshot = {
     monthlyCapacityCents: number;
     reservePercent: number;
     guestEstimate: number;
+    publicSlug: string;
+    whatsappMessageTemplate: string | null;
     palettes: WeddingPalette[];
   };
   categories: BudgetCategory[];
   payments: Payment[];
   vendors: Vendor[];
   guests: Guest[];
+  guestInvitations: GuestInvitation[];
   checklist: ChecklistItem[];
   household: {
     plan: HouseholdPlan;

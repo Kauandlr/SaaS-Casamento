@@ -13,6 +13,7 @@ import {
   EnvelopeSimple,
   Gauge,
   Gift,
+  GearSix,
   HeartStraight,
   HouseLine,
   LinkSimple,
@@ -33,6 +34,7 @@ import {
   UsersThree,
   Wallet,
   WarningCircle,
+  WhatsappLogo,
 } from '@phosphor-icons/react';
 import { Badge } from '@/components/ui/badge';
 import { CoupleAccess } from '@/components/couple-access';
@@ -58,14 +60,6 @@ import {
   NativeSelectOption,
 } from '@/components/ui/native-select';
 import { Progress } from '@/components/ui/progress';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import { Toaster, toast } from '@/components/ui/toast';
 import {
   HouseholdView,
@@ -73,9 +67,10 @@ import {
   type HouseholdAction,
 } from '@/components/household-view';
 import { GiftListView } from '@/components/gift-list-view';
-import type { Guest, WeddingSnapshot } from '@/lib/wedding-types';
+import type { Guest, GuestInvitation, WeddingSnapshot } from '@/lib/wedding-types';
 import { LunaPanel } from '@/components/luna-panel';
 import { PaletteView } from '@/components/palette-view';
+import { WhatsAppShareDialog } from '@/components/whatsapp-share-dialog';
 
 type View =
   | 'overview'
@@ -85,7 +80,9 @@ type View =
   | 'palette'
   | 'vendors'
   | 'guests'
-  | 'checklist';
+  | 'checklist'
+  | 'settings';
+type GuestRoleFilter = 'all' | 'convidado' | 'padrinho' | 'madrinha';
 type ActionName =
   | 'add_payment'
   | 'mark_payment_paid'
@@ -164,8 +161,14 @@ const navItems = [
     mobile: 'Tarefas',
     icon: ClipboardText,
   },
+  {
+    id: 'settings' as const,
+    label: 'Configurações',
+    mobile: 'Ajustes',
+    icon: GearSix,
+  },
 ];
-const mobileNavItems = navItems.filter((item) => item.id !== 'vendors');
+const mobileNavItems = navItems.filter((item) => !['vendors', 'palette'].includes(item.id));
 
 function money(value: number) {
   return compactCurrency.format(value / 100);
@@ -200,6 +203,8 @@ export function WeddingApp({
   const [dark, setDark] = useState(false);
   const [lunaOpen, setLunaOpen] = useState(false);
   const [weddingDateDialogOpen, setWeddingDateDialogOpen] = useState(false);
+  const [sharingInvitation, setSharingInvitation] = useState<GuestInvitation | null>(null);
+  const [generalShareOpen, setGeneralShareOpen] = useState(false);
 
   useEffect(() => {
     dataRef.current = data;
@@ -507,7 +512,7 @@ export function WeddingApp({
               <Button variant="outline" size="sm" onClick={logout}>
                 Sair
               </Button>
-              {view !== 'household' && view !== 'gifts' && view !== 'palette' && (
+              {view !== 'household' && view !== 'gifts' && view !== 'palette' && view !== 'settings' && (
                 <Button
                   onClick={() => { if (view === 'guests') setEditingGuest(null); setDialogOpen(true); }}
                   className="h-9 rounded-xl px-3"
@@ -568,6 +573,7 @@ export function WeddingApp({
                 onRsvp={(id, rsvp) =>
                   submit('set_guest_rsvp', { id, rsvp }, 'Confirmação de presença atualizada')
                 }
+                onShare={setSharingInvitation}
               />
             )}
             {view === 'checklist' && (
@@ -579,6 +585,9 @@ export function WeddingApp({
                   submit('toggle_task', { id }, 'Checklist atualizado')
                 }
               />
+            )}
+            {view === 'settings' && (
+              <Settings data={data} onShare={() => setGeneralShareOpen(true)} />
             )}
           </div>
 
@@ -627,7 +636,7 @@ export function WeddingApp({
           }
         />
       )}
-      {dialogOpen && view !== 'household' && view !== 'gifts' && view !== 'palette' && (
+      {dialogOpen && view !== 'household' && view !== 'gifts' && view !== 'palette' && view !== 'settings' && (
         <AddDialog
           key={view === 'guests' ? (editingGuest?.id ?? 'new-guest') : view}
           view={view}
@@ -639,6 +648,27 @@ export function WeddingApp({
           onSubmit={submit}
         />
       )}
+      <WhatsAppShareDialog
+        open={Boolean(sharingInvitation)}
+        onOpenChange={(open) => { if (!open) setSharingInvitation(null); }}
+        data={data}
+        invitation={sharingInvitation ?? undefined}
+        onSnapshot={setData}
+        onShared={(invitationId, openedAt) => {
+          if (!invitationId) return;
+          setData((current) => ({
+            ...current,
+            guestInvitations: current.guestInvitations.map((item) => item.id === invitationId ? { ...item, lastSharedAt: openedAt } : item),
+          }));
+        }}
+      />
+      <WhatsAppShareDialog
+        open={generalShareOpen}
+        onOpenChange={setGeneralShareOpen}
+        data={data}
+        onSnapshot={setData}
+        onShared={() => undefined}
+      />
     </Toaster>
   );
 }
@@ -1284,21 +1314,55 @@ function Guests({
   onAdd,
   onEdit,
   onRsvp,
+  onShare,
 }: {
   data: WeddingSnapshot;
   search: string;
   onAdd: () => void;
   onEdit: (guest: Guest) => void;
   onRsvp: (id: string, rsvp: string) => void;
+  onShare: (invitation: GuestInvitation) => void;
 }) {
-  const items = data.guests.filter((item) =>
-    `${item.fullName} ${item.groupName} ${item.groupType} ${item.role} ${item.ageGroup}`
-      .toLowerCase()
-      .includes(search.toLowerCase()),
-  );
+  const [roleFilter, setRoleFilter] = useState<GuestRoleFilter>('all');
+  const normalizedSearch = search.toLocaleLowerCase('pt-BR');
+  const items = data.guestInvitations.map((invitation) => ({
+    invitation,
+    members: data.guests.filter((guest) => invitation.guestIds.includes(guest.id)),
+  })).filter(({ invitation, members }) => {
+    const matchesSearch =
+      `${invitation.name} ${invitation.responsiblePhone} ${members.map((member) => member.fullName).join(' ')}`
+        .toLocaleLowerCase('pt-BR')
+        .includes(normalizedSearch);
+    const matchesRole = roleFilter === 'all'
+      || members.some((member) => member.role === roleFilter);
+
+    return matchesSearch && matchesRole;
+  });
   const confirmed = data.guests.filter(
     (item) => item.rsvp === 'confirmado',
   ).length;
+  const roleMetrics: Array<{
+    value: GuestRoleFilter;
+    label: string;
+    count: number;
+  }> = [
+    { value: 'all', label: 'Todos', count: data.guests.length },
+    {
+      value: 'convidado',
+      label: 'Convidados',
+      count: data.guests.filter((guest) => guest.role === 'convidado').length,
+    },
+    {
+      value: 'padrinho',
+      label: 'Padrinhos',
+      count: data.guests.filter((guest) => guest.role === 'padrinho').length,
+    },
+    {
+      value: 'madrinha',
+      label: 'Madrinhas',
+      count: data.guests.filter((guest) => guest.role === 'madrinha').length,
+    },
+  ];
   return (
     <>
       <PageHeading
@@ -1308,87 +1372,125 @@ function Guests({
         action="Novo convidado"
         onAction={onAdd}
       />
-      <div className="mb-4 grid grid-cols-3 gap-3 md:shrink-0">
-        <SmallMetric label="Confirmados" value={confirmed} />
-        <SmallMetric
-          label="Aguardando"
-          value={
-            data.guests.filter((item) => item.rsvp === 'aguardando').length
-          }
-        />
-        <SmallMetric label="Total cadastrados" value={data.guests.length} />
-      </div>
-      <section className="rounded-[28px] border border-border bg-card p-3 sm:p-5 md:min-h-0 md:flex-1 md:overflow-hidden">
-        {items.length ? (
-          <Table containerClassName="md:h-full md:overflow-auto">
-            <TableHeader className="sticky top-0 z-10 bg-card">
-              <TableRow>
-                <TableHead>Nome</TableHead>
-                <TableHead>Grupo</TableHead>
-                <TableHead>Papel</TableHead>
-                <TableHead>Lado</TableHead>
-                <TableHead>Faixa</TableHead>
-                <TableHead className="text-right">Confirmação de presença</TableHead>
-                <TableHead className="text-right">Editar</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {items.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell className="font-medium">
-                    <span className="inline-flex items-center gap-2">
-                      {item.fullName}
-                      <RelatedLink href={item.linkUrl} label={`Abrir link de ${item.fullName}`} />
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {item.groupType === 'individual' ? (item.groupName || '—') : `${item.groupType === 'família' ? 'Família' : item.groupType === 'casal' ? 'Casal' : 'Grupo'}: ${item.groupName}`}
-                  </TableCell>
-                  <TableCell className="capitalize">{item.role}</TableCell>
-                  <TableCell>{item.side}</TableCell>
-                  <TableCell className="capitalize">{item.ageGroup}</TableCell>
-                  <TableCell>
-                    <NativeSelect
-                      className="ml-auto w-[154px]"
-                      size="sm"
-                      value={item.rsvp}
-                      onValueChange={(value) => onRsvp(item.id, value ?? item.rsvp)}
-                    >
-                      <NativeSelectOption value="ainda não convidado">
-                        Não convidado
-                      </NativeSelectOption>
-                      <NativeSelectOption value="aguardando">
-                        Aguardando
-                      </NativeSelectOption>
-                      <NativeSelectOption value="confirmado">
-                        Confirmado
-                      </NativeSelectOption>
-                      <NativeSelectOption value="não irá">
-                        Não irá
-                      </NativeSelectOption>
-                      <NativeSelectOption value="talvez">
-                        Talvez
-                      </NativeSelectOption>
-                    </NativeSelect>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button type="button" variant="ghost" size="icon" aria-label={`Editar ${item.fullName}`} onClick={() => onEdit(item)}>
-                      <PencilSimple size={17} />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        ) : (
-          <EmptyState
-            icon={UserPlus}
-            title="Nenhum convidado encontrado"
-            description="Adicione pessoas e acompanhe as confirmações."
-            action="Adicionar convidado"
-            onAction={onAdd}
+      <div
+        className="mb-4 grid grid-cols-2 gap-3 md:shrink-0 lg:grid-cols-4"
+        role="group"
+        aria-label="Filtrar convidados por papel"
+      >
+        {roleMetrics.map((metric) => (
+          <RoleMetric
+            key={metric.value}
+            label={metric.label}
+            value={metric.count}
+            active={roleFilter === metric.value}
+            onClick={() => setRoleFilter(metric.value)}
           />
+        ))}
+      </div>
+      <section className="rounded-2xl border border-border bg-card md:min-h-0 md:flex-1 md:overflow-auto">
+        {items.length ? (
+          <div className="divide-y divide-border">
+            {items.map(({ invitation, members }) => {
+              const confirmedCount = members.filter((member) => member.rsvp === 'confirmado').length;
+              const declinedCount = members.filter((member) => member.rsvp === 'não irá').length;
+              const status = confirmedCount === members.length
+                ? 'Confirmado'
+                : declinedCount === members.length
+                  ? 'Recusado'
+                  : confirmedCount || declinedCount
+                    ? 'Parcialmente confirmado'
+                    : 'Aguardando confirmação';
+              const statusTone = status === 'Confirmado'
+                ? 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200'
+                : status === 'Recusado'
+                  ? 'bg-rose-100 text-rose-900 dark:bg-rose-950 dark:text-rose-200'
+                  : status === 'Parcialmente confirmado'
+                    ? 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200'
+                    : 'bg-muted text-muted-foreground';
+              return (
+                <article key={invitation.id} className="p-4 sm:p-5">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="font-semibold">{invitation.name}</h3>
+                        <Badge className={statusTone}>{status}</Badge>
+                      </div>
+                      <p className="mt-1 text-sm leading-6 text-muted-foreground">{members.map((member) => member.fullName).join(', ')}</p>
+                      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                        <span>{members.length} {members.length === 1 ? 'pessoa' : 'pessoas'}</span>
+                        <span>{invitation.responsiblePhone || 'WhatsApp não informado'}</span>
+                        <span>{invitation.lastSharedAt ? `Última abertura: ${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(invitation.lastSharedAt))}` : 'WhatsApp ainda não aberto'}</span>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button type="button" variant="outline" onClick={() => onShare(invitation)}>
+                        <WhatsappLogo size={17} weight="fill" />Enviar convite
+                      </Button>
+                      {members.map((member) => (
+                        <Button key={member.id} type="button" variant="ghost" size="icon" aria-label={`Editar ${member.fullName}`} title={`Editar ${member.fullName}`} onClick={() => onEdit(member)}>
+                          <PencilSimple size={17} />
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                  <details className="mt-4 border-t border-border pt-3">
+                    <summary className="cursor-pointer text-xs font-medium text-muted-foreground">Ajustar confirmações manualmente</summary>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                      {members.map((member) => (
+                        <label key={member.id} className="flex items-center justify-between gap-3 text-sm">
+                          <span className="truncate">{member.fullName}</span>
+                          <NativeSelect className="w-[142px]" size="sm" value={member.rsvp} onValueChange={(value) => onRsvp(member.id, value ?? member.rsvp)}>
+                            <NativeSelectOption value="ainda não convidado">Não convidado</NativeSelectOption>
+                            <NativeSelectOption value="aguardando">Aguardando</NativeSelectOption>
+                            <NativeSelectOption value="confirmado">Confirmado</NativeSelectOption>
+                            <NativeSelectOption value="não irá">Não irá</NativeSelectOption>
+                            <NativeSelectOption value="talvez">Talvez</NativeSelectOption>
+                          </NativeSelect>
+                        </label>
+                      ))}
+                    </div>
+                  </details>
+                </article>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="p-5"><EmptyState icon={UserPlus} title="Nenhum convite encontrado" description="Adicione pessoas e organize-as em convites para compartilhar." action="Adicionar convidado" onAction={onAdd} /></div>
         )}
+      </section>
+    </>
+  );
+}
+
+function Settings({ data, onShare }: { data: WeddingSnapshot; onShare: () => void }) {
+  const publicPath = `/casamento/${data.wedding.publicSlug}`;
+  return (
+    <>
+      <PageHeading
+        title="Configurações"
+        subtitle="Links públicos e formas de compartilhar o casamento."
+        icon={GearSix}
+      />
+      <section className="max-w-3xl rounded-2xl border border-border bg-card p-5 sm:p-7">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+          <div className="max-w-xl">
+            <div className="flex items-center gap-2">
+              <WhatsappLogo className="text-[#128c7e]" size={22} weight="fill" />
+              <h2 className="font-semibold">Compartilhar site pelo WhatsApp</h2>
+            </div>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">Abra o WhatsApp com uma mensagem geral e deixe que vocês escolham o contato. Nenhum convite individual ou confirmação é associado a este link.</p>
+            <a className="mt-3 inline-flex max-w-full items-center gap-2 truncate font-mono text-xs text-primary hover:underline" href={publicPath} target="_blank" rel="noreferrer">
+              <LinkSimple size={15} />{publicPath}
+            </a>
+          </div>
+          <Button type="button" className="h-10 shrink-0" onClick={onShare}>
+            <WhatsappLogo weight="fill" />Compartilhar site
+          </Button>
+        </div>
+        <div className="mt-6 border-t border-border pt-5">
+          <p className="text-sm font-medium">Sobre o registro</p>
+          <p className="mt-1 text-sm leading-6 text-muted-foreground">O Vínculo registra apenas que o WhatsApp foi aberto. A plataforma nunca marca uma mensagem como enviada.</p>
+        </div>
       </section>
     </>
   );
@@ -1574,7 +1676,7 @@ function AddDialog({
   onSubmit: (action: ActionName, payload: unknown, success: string) => void;
 }) {
   const [groupType, setGroupType] = useState(editingGuest?.groupType ?? 'individual');
-  const kind = view === 'overview' || view === 'household' || view === 'gifts' || view === 'palette' ? 'checklist' : view;
+  const kind = view === 'overview' || view === 'household' || view === 'gifts' || view === 'palette' || view === 'settings' ? 'checklist' : view;
   const titles = {
     finance: ['Novo pagamento', 'Registre um vencimento real.'],
     vendors: ['Novo fornecedor', 'Adicione uma proposta para comparar.'],
@@ -1821,7 +1923,7 @@ function AddDialog({
               </label>
               <div className="grid grid-cols-2 gap-3">
                 <label className={label}>
-                  Papel
+                  Papel no casamento
                   <NativeSelect name="role" className="w-full" defaultValue={editingGuest?.role ?? 'convidado'}>
                     <NativeSelectOption value="convidado">Convidado</NativeSelectOption>
                     <NativeSelectOption value="padrinho">Padrinho</NativeSelectOption>
@@ -1850,15 +1952,15 @@ function AddDialog({
               </label>
               <div className="grid grid-cols-2 gap-3">
                 <label className={label}>
-                  Lado
+                  Convidado de
                   <NativeSelect name="side" className="w-full" defaultValue={editingGuest?.side ?? 'Pessoa 1'}>
-                    <NativeSelectOption>Pessoa 1</NativeSelectOption>
-                    <NativeSelectOption>Pessoa 2</NativeSelectOption>
-                    <NativeSelectOption>Ambos</NativeSelectOption>
+                    <NativeSelectOption value="Pessoa 1">Homem</NativeSelectOption>
+                    <NativeSelectOption value="Pessoa 2">Mulher</NativeSelectOption>
+                    <NativeSelectOption value="Ambos">Ambos</NativeSelectOption>
                   </NativeSelect>
                 </label>
                 <label className={label}>
-                  Faixa
+                  Faixa etária
                   <NativeSelect name="ageGroup" className="w-full" defaultValue={editingGuest?.ageGroup ?? 'adulto'}>
                     <NativeSelectOption value="adulto">
                       Adulto
@@ -1985,8 +2087,8 @@ function PageHeading({
   title: string;
   subtitle: string;
   icon: typeof Gauge;
-  action: string;
-  onAction: () => void;
+  action?: string;
+  onAction?: () => void;
 }) {
   return (
     <div className="mb-7 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
@@ -1995,16 +2097,18 @@ function PageHeading({
           <Icon size={20} />
         </span>
         <div>
-          <h1 className="text-3xl font-semibold tracking-[-0.045em]">
+          <h1 className="text-3xl font-semibold tracking-[-0.035em]">
             {title}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
         </div>
       </div>
-      <Button onClick={onAction} className="self-start rounded-xl">
-        <Plus size={16} />
-        {action}
-      </Button>
+      {action && onAction && (
+        <Button onClick={onAction} className="self-start rounded-xl">
+          <Plus size={16} />
+          {action}
+        </Button>
+      )}
     </div>
   );
 }
@@ -2090,6 +2194,35 @@ function SmallMetric({ label, value }: { label: string; value: number }) {
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className="mt-1 font-mono text-2xl">{value}</p>
     </div>
+  );
+}
+function RoleMetric({
+  label,
+  value,
+  active,
+  onClick,
+}: {
+  label: string;
+  value: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={`rounded-2xl border p-4 text-left transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+        active
+          ? 'border-primary bg-primary text-primary-foreground'
+          : 'border-border bg-card hover:border-primary/45 hover:bg-muted/60'
+      }`}
+    >
+      <span className={`block text-xs ${active ? 'text-primary-foreground/75' : 'text-muted-foreground'}`}>
+        {label}
+      </span>
+      <span className="mt-1 block font-mono text-2xl">{value}</span>
+    </button>
   );
 }
 function Status({ value }: { value: string }) {

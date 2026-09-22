@@ -40,17 +40,17 @@ export function OnboardingForm() {
   return (
     <form action={submit} className="space-y-6">
       <Card><CardHeader><CardTitle>Dados do casamento</CardTitle></CardHeader><CardContent className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2"><Label htmlFor="personOne">Pessoa 1</Label><Input id="personOne" name="personOne" required /></div>
-        <div className="space-y-2"><Label htmlFor="personTwo">Pessoa 2</Label><Input id="personTwo" name="personTwo" required /></div>
-        <div className="space-y-2"><Label htmlFor="weddingDate">Data</Label><Input id="weddingDate" name="weddingDate" type="date" required /></div>
-        <div className="space-y-2"><Label htmlFor="city">Cidade</Label><Input id="city" name="city" /></div>
+        <div className="space-y-2"><Label htmlFor="personOne">Homem</Label><Input id="personOne" name="personOne" required /></div>
+        <div className="space-y-2"><Label htmlFor="personTwo">Mulher</Label><Input id="personTwo" name="personTwo" required /></div>
+        <div className="space-y-2"><Label htmlFor="weddingDate">Data do casamento</Label><Input id="weddingDate" name="weddingDate" type="date" required /></div>
+        <div className="space-y-2"><Label htmlFor="city">Cidade do casamento</Label><Input id="city" name="city" /></div>
       </CardContent></Card>
       <Card><CardHeader><CardTitle>Planejamento inicial</CardTitle></CardHeader><CardContent className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2"><Label htmlFor="budget">Orçamento total</Label><Input id="budget" name="budget" inputMode="decimal" placeholder="0,00" /></div>
         <div className="space-y-2"><Label htmlFor="saved">Valor já guardado</Label><Input id="saved" name="saved" inputMode="decimal" placeholder="0,00" /></div>
-        <div className="space-y-2"><Label htmlFor="monthlyCapacity">Capacidade mensal</Label><Input id="monthlyCapacity" name="monthlyCapacity" inputMode="decimal" placeholder="0,00" /></div>
-        <div className="space-y-2"><Label htmlFor="reservePercent">Reserva (%)</Label><Input id="reservePercent" name="reservePercent" type="number" min="0" max="100" defaultValue="10" /></div>
-        <div className="space-y-2"><Label htmlFor="guestEstimate">Estimativa de convidados</Label><Input id="guestEstimate" name="guestEstimate" type="number" min="0" max="10000" defaultValue="0" /></div>
+        <div className="space-y-2"><Label htmlFor="monthlyCapacity">Quanto podem guardar por mês</Label><Input id="monthlyCapacity" name="monthlyCapacity" inputMode="decimal" placeholder="0,00" /></div>
+        <div className="space-y-2"><Label htmlFor="reservePercent">Margem de segurança (%)</Label><Input id="reservePercent" name="reservePercent" type="number" min="0" max="100" defaultValue="10" /></div>
+        <div className="space-y-2"><Label htmlFor="guestEstimate">Número estimado de convidados</Label><Input id="guestEstimate" name="guestEstimate" type="number" min="0" max="10000" defaultValue="0" /></div>
       </CardContent></Card>
       <Card><CardHeader className="flex-row items-center justify-between"><CardTitle>Categorias de orçamento (opcional)</CardTitle><Button type="button" variant="outline" onClick={() => setCategories((items) => [...items, { name: '', planned: '' }])}>Adicionar categoria</Button></CardHeader><CardContent className="space-y-3">
         {categories.length === 0 && <p className="text-sm text-muted-foreground">Você pode começar sem categorias e adicioná-las quando precisar.</p>}

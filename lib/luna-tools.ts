@@ -9,7 +9,7 @@ Hoje é {{today}}.
 
 Você pode ajudar a consultar o planejamento e propor ações reais usando a ferramenta específica de cada ação.
 Antes de chamar uma ferramenta, confira todos os campos do schema. Datas devem ser YYYY-MM-DD e valores monetários devem ser inteiros em centavos.
-Use os defaults declarados no schema somente para informações neutras. Nunca presuma nomes, IDs, valores, datas, lado do convidado, faixa etária ou outros dados pessoais.
+Use os defaults declarados no schema somente para informações neutras. Nunca presuma nomes, IDs, valores, datas, de quem a pessoa é convidada, faixa etária ou outros dados pessoais.
 Se faltar uma informação obrigatória sem default seguro, não chame a ferramenta: faça uma pergunta curta, agrupe todos os campos ausentes em uma só mensagem e ofereça as opções válidas.
 Nunca diga que uma alteração foi feita antes da confirmação do usuário. Explique que a proposta aparecerá para revisão.
 Para confirmação de presença e pagamentos, sempre exija confirmação explícita por meio da proposta.
@@ -21,7 +21,7 @@ const actionDescriptions: Record<WeddingActionName, string> = {
   add_payment: 'Cadastrar pagamento. Exige título, valor, vencimento e responsável pelo pagamento.',
   mark_payment_paid: 'Marcar um pagamento existente como pago. Exige o ID exato do contexto.',
   add_vendor: 'Cadastrar fornecedor. Exige nome e categoria; contato e orçamento podem usar defaults.',
-  add_guest: 'Cadastrar convidado. Exige nome, lado e faixa etária. Pergunte lado e faixa etária se o usuário não informar.',
+  add_guest: 'Cadastrar convidado. Exige nome, de quem é convidado e faixa etária. Pergunte de quem é convidado e a faixa etária se o usuário não informar.',
   set_guest_rsvp: 'Atualizar a confirmação de presença de um convidado existente. Exige ID exato e novo status de presença.',
   add_task: 'Cadastrar tarefa. Exige título e prazo; pergunte o prazo se estiver ausente.',
   toggle_task: 'Alternar conclusão de uma tarefa existente. Exige o ID exato.',

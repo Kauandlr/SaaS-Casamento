@@ -103,7 +103,7 @@ void test('rejects an incomplete guest proposal and explains what must be confir
   } catch (error) {
     assert.ok(error instanceof z.ZodError);
     const message = explainActionValidationError(error);
-    assert.match(message, /lado/);
+    assert.match(message, /de quem é convidado/);
     assert.match(message, /faixa etária/);
   }
 });
