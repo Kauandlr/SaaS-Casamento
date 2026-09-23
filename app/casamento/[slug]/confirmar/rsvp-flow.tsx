@@ -17,7 +17,8 @@ import { Input } from '@/components/ui/input';
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
-import { rsvpResponseCounts, type PublicRsvpInvitation } from '@/lib/rsvp';
+import type { PublicRsvpInvitation } from '@/lib/rsvp';
+import { rsvpResponseCounts } from '@/lib/rsvp-rules';
 
 type Step = 'identify' | 'people' | 'review' | 'complete';
 
