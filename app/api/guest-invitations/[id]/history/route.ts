@@ -14,7 +14,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
     const invitation = await db().prepare('SELECT id FROM guest_invitation_groups WHERE id = ? AND wedding_id = ?')
       .bind(id, weddingId).first<Row>();
     if (!invitation) return NextResponse.json({ error: 'Convite não encontrado.' }, { status: 404 });
-    const rows = await db().prepare(`SELECT h.id, h.subject_name, h.previous_response, h.new_response,
+    const rows = await db().prepare(`SELECT h.id, h.guest_id, h.subject_name, h.previous_response, h.new_response,
         s.source, s.note, s.created_at, u.display_name
       FROM rsvp_submissions s
       LEFT JOIN rsvp_response_history h ON h.submission_id = s.id
@@ -24,6 +24,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
     return NextResponse.json({
       history: rows.results.map((row) => ({
         id: String(row.id ?? `${row.created_at}-${row.subject_name ?? 'submission'}`),
+        guestId: row.guest_id ? String(row.guest_id) : null,
         subjectName: row.subject_name ? String(row.subject_name) : null,
         previousResponse: row.previous_response ? String(row.previous_response) : null,
         newResponse: row.new_response ? String(row.new_response) : null,

@@ -1418,11 +1418,11 @@ function GuestResponseTable({ item, groupName, onEdit, onRsvp }: {
 }
 
 function InvitationFooter({ invitation }: { invitation: GuestInvitation }) {
+  if (!invitation.lastResponseAt && !invitation.rsvpNote) return null;
   return (
     <footer className="border-t border-border px-4 pb-4 sm:px-5">
       {invitation.lastResponseAt && <p className="mt-3 text-xs text-muted-foreground">Respondido em {new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(invitation.lastResponseAt))}</p>}
       {invitation.rsvpNote && <p className="mt-3 rounded-xl bg-secondary/60 p-3 text-sm"><span className="font-medium">Observação:</span> {invitation.rsvpNote}</p>}
-      <InvitationHistory invitationId={invitation.id} />
     </footer>
   );
 }
@@ -1637,21 +1637,26 @@ function Settings({ data, saving, onShare, onSave }: {
   );
 }
 
-type HistoryItem = { id: string; subjectName: string | null; previousResponse: string | null; newResponse: string | null; source: string; note: string; createdAt: string; actorName: string | null };
+type HistoryItem = { id: string; guestId: string | null; subjectName: string | null; previousResponse: string | null; newResponse: string | null; source: string; note: string; createdAt: string; actorName: string | null };
 
-function InvitationHistory({ invitationId }: { invitationId: string }) {
+function InvitationHistory({ invitationId, guestId }: { invitationId: string; guestId: string }) {
   const [history, setHistory] = useState<HistoryItem[] | null>(null);
   const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
   async function load() {
     if (history || loading) return;
     setLoading(true);
+    setFailed(false);
     try {
       const response = await fetch(`/api/guest-invitations/${invitationId}/history`);
       const body = await response.json() as { history?: HistoryItem[] };
-      setHistory(body.history ?? []);
+      if (!response.ok) throw new Error('HISTORY_REQUEST_FAILED');
+      setHistory((body.history ?? []).filter((item) => item.guestId === guestId));
+    } catch {
+      setFailed(true);
     } finally { setLoading(false); }
   }
-  return <details className="mt-4 border-t border-border pt-3" onToggle={(event) => { if (event.currentTarget.open) void load(); }}><summary className="cursor-pointer text-xs font-medium text-muted-foreground">Histórico de alterações</summary><div className="mt-3 space-y-3">{loading && <p className="text-xs text-muted-foreground">Carregando histórico…</p>}{history?.length === 0 && <p className="text-xs text-muted-foreground">Nenhuma alteração registrada.</p>}{history?.map((item) => <div key={item.id} className="border-l-2 border-border pl-3 text-xs"><p className="font-medium">{item.subjectName ? `${item.subjectName}: ${item.previousResponse} → ${item.newResponse}` : 'Resposta enviada'}</p><p className="mt-1 text-muted-foreground">{item.source === 'admin' ? `Administração${item.actorName ? ` · ${item.actorName}` : ''}` : 'Convidado'} · {new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(item.createdAt))}</p>{item.note && <p className="mt-1 text-muted-foreground">Observação: {item.note}</p>}</div>)}</div></details>;
+  return <details className="rounded-xl border border-border px-3 py-2.5" onToggle={(event) => { if (event.currentTarget.open) void load(); }}><summary className="cursor-pointer text-sm font-medium">Histórico de alterações</summary><div className="mt-3 space-y-2">{loading && <p className="text-xs text-muted-foreground">Carregando histórico…</p>}{failed && <p role="alert" className="text-xs text-destructive">Não foi possível carregar o histórico.</p>}{history?.length === 0 && <p className="text-xs text-muted-foreground">Nenhuma alteração registrada para este convidado.</p>}{history?.map((item) => <div key={item.id} className="rounded-lg bg-muted/50 px-3 py-2.5 text-xs"><p className="font-medium">{item.previousResponse} → {item.newResponse}</p><p className="mt-1 text-muted-foreground">{item.source === 'admin' ? `Administração${item.actorName ? ` · ${item.actorName}` : ''}` : 'Convidado'} · {new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(item.createdAt))}</p>{item.note && <p className="mt-1 text-muted-foreground">Observação: {item.note}</p>}</div>)}</div></details>;
 }
 
 function Checklist({
@@ -2139,6 +2144,9 @@ function AddDialog({
                 Convite, perfil ou outro link
                 <Input name="linkUrl" type="url" defaultValue={editingGuest?.linkUrl} placeholder="https://" className={baseInput} />
               </label>
+              {editingGuest?.invitationGroupId && (
+                <InvitationHistory invitationId={editingGuest.invitationGroupId} guestId={editingGuest.id} />
+              )}
             </>
           )}
           {kind === 'checklist' && (
