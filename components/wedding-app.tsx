@@ -38,6 +38,12 @@ import {
   WhatsappLogo,
 } from '@phosphor-icons/react';
 import { Badge } from '@/components/ui/badge';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
 import { CoupleAccess } from '@/components/couple-access';
 import { Button } from '@/components/ui/button';
 import {
@@ -1318,6 +1324,109 @@ function Vendors({
   );
 }
 
+type GuestListItem = {
+  invitation: GuestInvitation;
+  members: Guest[];
+  visibleMembers: Guest[];
+  status: InvitationRsvpStatus;
+};
+
+function guestRoleLabel(role: string) {
+  if (role === 'padrinho') return 'Padrinho';
+  if (role === 'madrinha') return 'Madrinha';
+  return 'Convidado';
+}
+
+function invitationStatus(status: InvitationRsvpStatus) {
+  if (status === 'confirmado') return { label: 'Confirmado', className: 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200' };
+  if (status === 'recusado') return { label: 'Não irá', className: 'bg-muted text-foreground' };
+  if (status === 'parcial') return { label: 'Pendente', className: 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200' };
+  return { label: 'Pendente', className: 'bg-muted text-muted-foreground' };
+}
+
+function invitationGroupName(item: GuestListItem) {
+  return item.members.find((member) => member.groupType !== 'individual')?.groupName.trim()
+    || item.invitation.name;
+}
+
+function GuestMemberRow({
+  member,
+  invitation,
+  onEdit,
+  onRsvp,
+  onShare,
+}: {
+  member: Guest;
+  invitation: GuestInvitation;
+  onEdit: (guest: Guest) => void;
+  onRsvp: (id: string, rsvp: string) => void;
+  onShare?: () => void;
+}) {
+  const roleLabel = guestRoleLabel(member.role);
+  const ageLabel = member.ageGroup.charAt(0).toLocaleUpperCase('pt-BR') + member.ageGroup.slice(1);
+  return (
+    <div role="row" className="grid gap-3 px-4 py-3.5 transition-colors hover:bg-muted/25 sm:px-5 lg:grid-cols-[minmax(0,1fr)_9rem_10rem_6rem] lg:items-center">
+      <div role="cell" className="min-w-0">
+        <p className="truncate text-sm font-medium">{member.fullName}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground lg:hidden">{roleLabel} · {ageLabel}</p>
+        <p className="mt-0.5 hidden text-xs text-muted-foreground lg:block">{ageLabel}{onShare ? ` · ${invitation.responsiblePhone || 'WhatsApp não informado'}` : ''}</p>
+      </div>
+      <span role="cell" className="hidden text-sm lg:block">{roleLabel}</span>
+      <div role="cell">
+        <NativeSelect className="w-full lg:w-[148px]" size="sm" value={member.rsvp} onValueChange={(value) => onRsvp(member.id, value ?? member.rsvp)} aria-label={`Confirmação de ${member.fullName}`}>
+          {!['pendente', 'confirmado', 'não irá'].includes(member.rsvp) && <NativeSelectOption value={member.rsvp}>Pendente</NativeSelectOption>}
+          <NativeSelectOption value="pendente">Pendente</NativeSelectOption>
+          <NativeSelectOption value="confirmado">Confirmado</NativeSelectOption>
+          <NativeSelectOption value="não irá">Não irá</NativeSelectOption>
+        </NativeSelect>
+      </div>
+      <div role="cell" className="flex justify-end gap-1">
+        {onShare && <Button type="button" variant="outline" size="icon" aria-label={`Enviar convite para ${member.fullName}`} onClick={onShare}><WhatsappLogo weight="fill" /></Button>}
+        <Button type="button" variant="ghost" size="icon" aria-label={`Editar ${member.fullName}`} onClick={() => onEdit(member)}><PencilSimple /></Button>
+      </div>
+    </div>
+  );
+}
+
+function GuestResponseTable({ item, groupName, onEdit, onRsvp }: {
+  item: GuestListItem;
+  groupName: string;
+  onEdit: (guest: Guest) => void;
+  onRsvp: (id: string, rsvp: string) => void;
+}) {
+  return (
+    <div role="table" aria-label={`Convidados em ${groupName}`}>
+      <div role="row" className="hidden grid-cols-[minmax(0,1fr)_9rem_10rem_6rem] gap-3 border-b border-border px-5 py-2 text-[11px] font-medium text-muted-foreground lg:grid">
+        <span role="columnheader">Pessoa</span>
+        <span role="columnheader">Papel</span>
+        <span role="columnheader">Confirmação</span>
+        <span role="columnheader" className="text-right">Ação</span>
+      </div>
+      <div className="divide-y divide-border">
+        {item.visibleMembers.map((member) => <GuestMemberRow key={member.id} member={member} invitation={item.invitation} onEdit={onEdit} onRsvp={onRsvp} />)}
+        {item.invitation.companions.map((companion) => (
+          <div key={companion.id} role="row" className="grid gap-3 px-4 py-3.5 sm:px-5 lg:grid-cols-[minmax(0,1fr)_9rem_10rem_6rem] lg:items-center">
+            <div role="cell" className="min-w-0"><p className="truncate text-sm font-medium">{companion.name}</p><p className="mt-0.5 text-xs text-muted-foreground">{companion.ageGroup}</p></div>
+            <span role="cell" className="hidden text-sm text-muted-foreground lg:block">Acompanhante</span>
+            <div role="cell"><Badge variant="secondary">Confirmado</Badge></div>
+            <span role="cell" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function InvitationFooter({ invitation }: { invitation: GuestInvitation }) {
+  return (
+    <footer className="border-t border-border px-4 pb-4 sm:px-5">
+      {invitation.lastResponseAt && <p className="mt-3 text-xs text-muted-foreground">Respondido em {new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(invitation.lastResponseAt))}</p>}
+      {invitation.rsvpNote && <p className="mt-3 rounded-xl bg-secondary/60 p-3 text-sm"><span className="font-medium">Observação:</span> {invitation.rsvpNote}</p>}
+      <InvitationHistory invitationId={invitation.id} />
+    </footer>
+  );
+}
+
 function Guests({
   data,
   search,
@@ -1337,221 +1446,121 @@ function Guests({
 }) {
   const [roleFilter, setRoleFilter] = useState<GuestRoleFilter>('all');
   const [rsvpFilter, setRsvpFilter] = useState<'all' | Exclude<InvitationRsvpStatus, 'parcial'>>('all');
+  const [openGroups, setOpenGroups] = useState<string[]>([]);
   const normalizedSearch = search.toLocaleLowerCase('pt-BR');
   const allItems = data.guestInvitations.map((invitation) => {
     const members = data.guests.filter((guest) => invitation.guestIds.includes(guest.id));
     return { invitation, members, status: invitationRsvpStatus(members.map((member) => member.rsvp), invitation.companions.length) };
   });
-  const items = allItems.map(({ invitation, members, status }) => {
+  const items: GuestListItem[] = allItems.map(({ invitation, members, status }) => {
     const groupMatchesSearch = `${invitation.name} ${invitation.responsiblePhone} ${members[0]?.groupName ?? ''}`
       .toLocaleLowerCase('pt-BR')
       .includes(normalizedSearch);
     const visibleMembers = members.filter((member) => {
       const matchesRole = roleFilter === 'all' || member.role === roleFilter;
-      const matchesSearch = groupMatchesSearch
-        || member.fullName.toLocaleLowerCase('pt-BR').includes(normalizedSearch);
+      const matchesSearch = groupMatchesSearch || member.fullName.toLocaleLowerCase('pt-BR').includes(normalizedSearch);
       return matchesRole && matchesSearch;
     });
     return { invitation, members, visibleMembers, status };
-  }).filter(({ visibleMembers, status }) =>
-    visibleMembers.length > 0 && (
-      rsvpFilter === 'all'
-      || status === rsvpFilter
-      || (rsvpFilter === 'pendente' && status === 'parcial')
-    ),
-  );
+  }).filter(({ visibleMembers, status }) => visibleMembers.length > 0 && (
+    rsvpFilter === 'all' || status === rsvpFilter || (rsvpFilter === 'pendente' && status === 'parcial')
+  ));
+  const individualItems = items.filter((item) => item.invitation.type === 'individual');
+  const familyItems = items.filter((item) => item.invitation.type !== 'individual');
+  const visibleGroupKey = [
+    ...(individualItems.length ? ['individual'] : []),
+    ...familyItems.map((item) => `invitation-${item.invitation.id}`),
+  ].join('|');
+  useEffect(() => {
+    if (!normalizedSearch && roleFilter === 'all' && rsvpFilter === 'all') return;
+    setOpenGroups(visibleGroupKey ? visibleGroupKey.split('|') : []);
+  }, [normalizedSearch, roleFilter, rsvpFilter, visibleGroupKey]);
   const { confirmed, declined, pending: pendingResponses } = rsvpResponseCounts(
     data.guests.map((guest) => guest.rsvp),
     data.guestInvitations.reduce((sum, invitation) => sum + invitation.companions.length, 0),
+  );
+  const individualCounts = rsvpResponseCounts(
+    individualItems.flatMap((item) => item.members.map((member) => member.rsvp)),
+    individualItems.reduce((sum, item) => sum + item.invitation.companions.length, 0),
   );
   const ages = confirmedAgeTotals([
     ...data.guests.map((guest) => ({ ageGroup: guest.ageGroup, rsvp: guest.rsvp })),
     ...data.guestInvitations.flatMap((invitation) => invitation.companions.map((companion) => ({ ageGroup: companion.ageGroup, rsvp: 'confirmado' }))),
   ]);
   const publicPath = `/casamento/${data.wedding.publicSlug}`;
-  const roleMetrics: Array<{
-    value: GuestRoleFilter;
-    label: string;
-    count: number;
-  }> = [
+  const roleMetrics: Array<{ value: GuestRoleFilter; label: string; count: number }> = [
     { value: 'all', label: 'Todos', count: data.guests.length },
-    {
-      value: 'convidado',
-      label: 'Convidados',
-      count: data.guests.filter((guest) => guest.role === 'convidado').length,
-    },
-    {
-      value: 'padrinho',
-      label: 'Padrinhos',
-      count: data.guests.filter((guest) => guest.role === 'padrinho').length,
-    },
-    {
-      value: 'madrinha',
-      label: 'Madrinhas',
-      count: data.guests.filter((guest) => guest.role === 'madrinha').length,
-    },
+    { value: 'convidado', label: 'Convidados', count: data.guests.filter((guest) => guest.role === 'convidado').length },
+    { value: 'padrinho', label: 'Padrinhos', count: data.guests.filter((guest) => guest.role === 'padrinho').length },
+    { value: 'madrinha', label: 'Madrinhas', count: data.guests.filter((guest) => guest.role === 'madrinha').length },
   ];
   return (
     <>
-      <PageHeading
-        title="Convidados"
-        subtitle={`${confirmed} confirmados · ${declined} não irão · ${pendingResponses} pendentes.`}
-        icon={UsersThree}
-        action="Novo convidado"
-        onAction={onAdd}
-      />
+      <PageHeading title="Convidados" subtitle={`${confirmed} confirmados · ${declined} não irão · ${pendingResponses} pendentes.`} icon={UsersThree} action="Novo convidado" onAction={onAdd} />
       <section className="mb-4 overflow-hidden rounded-2xl border border-border bg-card">
         <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
           <div className="flex min-w-0 items-start gap-3">
-            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-secondary text-secondary-foreground">
-              <LinkSimple size={19} />
-            </span>
-            <div className="min-w-0">
-              <h2 className="text-sm font-semibold">Link do casamento</h2>
-              <p className="mt-1 text-sm leading-5 text-muted-foreground">
-                Envie o site geral ou use os convites direcionados na lista abaixo.
-              </p>
-              <a
-                className="mt-2 block truncate font-mono text-xs text-primary hover:underline"
-                href={publicPath}
-                target="_blank"
-                rel="noreferrer"
-              >
-                {publicPath}
-              </a>
-            </div>
+            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-secondary text-secondary-foreground"><LinkSimple size={19} /></span>
+            <div className="min-w-0"><h2 className="text-sm font-semibold">Link do casamento</h2><p className="mt-1 text-sm leading-5 text-muted-foreground">Envie o site geral ou use os convites direcionados na lista abaixo.</p><a className="mt-2 block truncate font-mono text-xs text-primary hover:underline" href={publicPath} target="_blank" rel="noreferrer">{publicPath}</a></div>
           </div>
-          <Button type="button" className="h-9 shrink-0" onClick={onShareSite}>
-            <WhatsappLogo weight="fill" /> Enviar link
-          </Button>
+          <Button type="button" className="h-9 shrink-0" onClick={onShareSite}><WhatsappLogo weight="fill" /> Enviar link</Button>
         </div>
       </section>
-      <div
-        className="mb-4 grid grid-cols-2 gap-3 md:shrink-0 lg:grid-cols-4"
-        role="group"
-        aria-label="Filtrar convidados por papel"
-      >
-        {roleMetrics.map((metric) => (
-          <RoleMetric
-            key={metric.value}
-            label={metric.label}
-            value={metric.count}
-            active={roleFilter === metric.value}
-            onClick={() => setRoleFilter(metric.value)}
-          />
-        ))}
+      <div className="mb-4 grid grid-cols-2 gap-3 md:shrink-0 lg:grid-cols-4" role="group" aria-label="Filtrar convidados por papel">
+        {roleMetrics.map((metric) => <RoleMetric key={metric.value} label={metric.label} value={metric.count} active={roleFilter === metric.value} onClick={() => setRoleFilter(metric.value)} />)}
       </div>
       <div className="mb-4 grid grid-cols-2 divide-x divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card lg:grid-cols-4 lg:divide-y-0">
         {[['Confirmados', confirmed], ['Não irão', declined], ['Adultos confirmados', ages.adults], ['Crianças confirmadas', ages.children]].map(([label, value]) => <div key={String(label)} className="p-4"><p className="font-mono text-2xl font-semibold">{value}</p><p className="mt-1 text-xs text-muted-foreground">{label}</p></div>)}
       </div>
       <label className="mb-4 grid max-w-xs gap-2 text-sm font-medium">Situação do convite
-        <NativeSelect value={rsvpFilter} onValueChange={(value) => setRsvpFilter((value ?? 'all') as typeof rsvpFilter)}>
-          <NativeSelectOption value="all">Todas</NativeSelectOption>
-          <NativeSelectOption value="pendente">Pendente</NativeSelectOption>
-          <NativeSelectOption value="confirmado">Confirmado</NativeSelectOption>
-          <NativeSelectOption value="recusado">Não irá</NativeSelectOption>
-        </NativeSelect>
+        <NativeSelect value={rsvpFilter} onValueChange={(value) => setRsvpFilter((value ?? 'all') as typeof rsvpFilter)}><NativeSelectOption value="all">Todas</NativeSelectOption><NativeSelectOption value="pendente">Pendente</NativeSelectOption><NativeSelectOption value="confirmado">Confirmado</NativeSelectOption><NativeSelectOption value="recusado">Não irá</NativeSelectOption></NativeSelect>
       </label>
-      <section aria-label="Lista de convidados" className="space-y-3">
+      <section aria-label="Lista de convidados">
         {items.length ? (
-          items.map(({ invitation, members, visibleMembers, status }) => {
-              const counts = rsvpResponseCounts(members.map((member) => member.rsvp), invitation.companions.length);
-              const statusLabel = { pendente: 'Pendente', parcial: 'Pendente', confirmado: 'Confirmado', recusado: 'Não irá' }[status];
-              const statusTone = status === 'confirmado'
-                ? 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200'
-                : status === 'recusado'
-                  ? 'bg-muted text-foreground'
-                  : status === 'parcial'
-                    ? 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200'
-                    : 'bg-muted text-muted-foreground';
-              const familyName = members.find((member) => member.groupType !== 'individual')?.groupName.trim();
-              const groupName = familyName || (members.length > 1 ? invitation.name : 'Sem família');
-              return (
-                <article key={invitation.id} className="overflow-hidden rounded-2xl border border-border bg-card">
-                  <header className="flex flex-col gap-3 border-b border-border bg-muted/35 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-                    <div className="flex min-w-0 items-center gap-3">
-                      <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-secondary text-secondary-foreground">
-                        <UsersFour size={18} />
-                      </span>
-                      <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="truncate text-sm font-semibold">{groupName}</h3>
-                        <Badge className={statusTone}>{statusLabel}</Badge>
-                      </div>
-                        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                          <span>{members.length} {members.length === 1 ? 'pessoa' : 'pessoas'}</span>
-                        <span>{counts.confirmed} confirmados · {counts.declined} não irá · {counts.pending} pendentes</span>
-                        <span>{invitation.responsiblePhone || 'WhatsApp não informado'}</span>
-                      </div>
-                    </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button type="button" size="sm" variant="outline" onClick={() => onShare(invitation)}>
-                        <WhatsappLogo weight="fill" />
-                        {familyName ? 'Enviar para a família' : 'Enviar convite'}
-                      </Button>
-                    </div>
-                  </header>
-                  <div role="table" aria-label={`Convidados em ${groupName}`}>
-                    <div role="row" className="hidden grid-cols-[minmax(0,1fr)_9rem_10rem_3rem] gap-3 border-b border-border px-5 py-2 text-[11px] font-medium text-muted-foreground lg:grid">
-                      <span role="columnheader">Pessoa</span>
-                      <span role="columnheader">Papel</span>
-                      <span role="columnheader">Confirmação</span>
-                      <span role="columnheader" className="text-right">Ação</span>
-                    </div>
-                    <div className="divide-y divide-border">
-                      {visibleMembers.map((member) => {
-                        const roleLabel = member.role === 'padrinho'
-                          ? 'Padrinho'
-                          : member.role === 'madrinha'
-                            ? 'Madrinha'
-                            : 'Convidado';
-                        const ageLabel = member.ageGroup.charAt(0).toLocaleUpperCase('pt-BR') + member.ageGroup.slice(1);
-                        return (
-                        <div key={member.id} role="row" className="grid gap-3 px-4 py-3.5 transition-colors hover:bg-muted/25 sm:px-5 lg:grid-cols-[minmax(0,1fr)_9rem_10rem_3rem] lg:items-center">
-                          <div role="cell" className="min-w-0">
-                            <p className="truncate text-sm font-medium">{member.fullName}</p>
-                            <p className="mt-0.5 text-xs text-muted-foreground lg:hidden">{roleLabel} · {ageLabel}</p>
-                            <p className="mt-0.5 hidden text-xs text-muted-foreground lg:block">{ageLabel}</p>
-                          </div>
-                          <span role="cell" className="hidden text-sm lg:block">{roleLabel}</span>
-                          <div role="cell">
-                            <NativeSelect className="w-full lg:w-[148px]" size="sm" value={member.rsvp} onValueChange={(value) => onRsvp(member.id, value ?? member.rsvp)} aria-label={`Confirmação de ${member.fullName}`}>
-                            {!['pendente', 'confirmado', 'não irá'].includes(member.rsvp) && <NativeSelectOption value={member.rsvp}>Pendente</NativeSelectOption>}
-                            <NativeSelectOption value="pendente">Pendente</NativeSelectOption>
-                            <NativeSelectOption value="confirmado">Confirmado</NativeSelectOption>
-                            <NativeSelectOption value="não irá">Não irá</NativeSelectOption>
-                          </NativeSelect>
-                          </div>
-                          <div role="cell" className="flex justify-end">
-                            <Button type="button" variant="ghost" size="icon" aria-label={`Editar ${member.fullName}`} onClick={() => onEdit(member)}>
-                              <PencilSimple />
-                            </Button>
-                          </div>
-                        </div>
-                        );
-                      })}
-                      {invitation.companions.map((companion) => (
-                        <div key={companion.id} role="row" className="grid gap-3 px-4 py-3.5 sm:px-5 lg:grid-cols-[minmax(0,1fr)_9rem_10rem_3rem] lg:items-center">
-                          <div role="cell" className="min-w-0">
-                            <p className="truncate text-sm font-medium">{companion.name}</p>
-                            <p className="mt-0.5 text-xs text-muted-foreground">{companion.ageGroup}</p>
-                          </div>
-                          <span role="cell" className="hidden text-sm text-muted-foreground lg:block">Acompanhante</span>
-                          <div role="cell"><Badge variant="secondary">Confirmado</Badge></div>
-                          <span role="cell" />
-                        </div>
-                      ))}
-                    </div>
+          <Accordion multiple value={openGroups} onValueChange={setOpenGroups} className="gap-3">
+            {individualItems.length > 0 && (
+              <AccordionItem value="individual" className="overflow-hidden rounded-2xl border border-border bg-card">
+                <AccordionTrigger className="rounded-none px-4 py-4 hover:no-underline sm:px-5">
+                  <span className="flex min-w-0 items-center gap-3 pr-3">
+                    <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-secondary text-secondary-foreground"><UsersThree size={18} /></span>
+                    <span className="min-w-0"><span className="block font-semibold">Individual</span><span className="mt-1 block text-xs font-normal text-muted-foreground">{individualItems.length} {individualItems.length === 1 ? 'pessoa' : 'pessoas'} · {individualCounts.confirmed} confirmados · {individualCounts.declined} não irá · {individualCounts.pending} pendentes</span></span>
+                  </span>
+                </AccordionTrigger>
+                <AccordionContent className="pb-0 [&_p:not(:last-child)]:mb-0">
+                  <div className="hidden grid-cols-[minmax(0,1fr)_9rem_10rem_6rem] gap-3 border-t border-border px-5 py-2 text-[11px] font-medium text-muted-foreground lg:grid"><span>Pessoa</span><span>Papel</span><span>Confirmação</span><span className="text-right">Ações</span></div>
+                  <div className="divide-y divide-border border-t border-border lg:border-t-0">
+                    {individualItems.map((item) => (
+                      <article key={item.invitation.id} aria-label={`Convite individual de ${item.visibleMembers[0]?.fullName ?? item.invitation.name}`}>
+                        {item.visibleMembers.map((member) => <GuestMemberRow key={member.id} member={member} invitation={item.invitation} onEdit={onEdit} onRsvp={onRsvp} onShare={() => onShare(item.invitation)} />)}
+                        {item.invitation.companions.map((companion) => <div key={companion.id} className="grid gap-3 px-4 py-3.5 sm:px-5 lg:grid-cols-[minmax(0,1fr)_9rem_10rem_6rem] lg:items-center"><div><p className="text-sm font-medium">{companion.name}</p><p className="text-xs text-muted-foreground">{companion.ageGroup}</p></div><span className="hidden text-sm text-muted-foreground lg:block">Acompanhante</span><Badge variant="secondary">Confirmado</Badge><span /></div>)}
+                        <InvitationFooter invitation={item.invitation} />
+                      </article>
+                    ))}
                   </div>
-                  <footer className="border-t border-border px-4 pb-4 sm:px-5">
-                    {invitation.lastResponseAt && <p className="mt-3 text-xs text-muted-foreground">Respondido em {new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(invitation.lastResponseAt))}</p>}
-                    {invitation.rsvpNote && <p className="mt-3 rounded-xl bg-secondary/60 p-3 text-sm"><span className="font-medium">Observação:</span> {invitation.rsvpNote}</p>}
-                    <InvitationHistory invitationId={invitation.id} />
-                  </footer>
-                </article>
+                </AccordionContent>
+              </AccordionItem>
+            )}
+            {familyItems.map((item) => {
+              const groupName = invitationGroupName(item);
+              const counts = rsvpResponseCounts(item.members.map((member) => member.rsvp), item.invitation.companions.length);
+              const status = invitationStatus(item.status);
+              return (
+                <AccordionItem key={item.invitation.id} value={`invitation-${item.invitation.id}`} className="overflow-hidden rounded-2xl border border-border bg-card">
+                  <AccordionTrigger className="rounded-none px-4 py-4 hover:no-underline sm:px-5">
+                    <span className="flex min-w-0 items-center gap-3 pr-3">
+                      <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-secondary text-secondary-foreground"><UsersFour size={18} /></span>
+                      <span className="min-w-0"><span className="flex flex-wrap items-center gap-2"><span className="truncate font-semibold">{groupName}</span><Badge className={status.className}>{status.label}</Badge></span><span className="mt-1 block text-xs font-normal text-muted-foreground">{item.members.length} {item.members.length === 1 ? 'pessoa' : 'pessoas'} · {counts.confirmed} confirmados · {counts.declined} não irá · {counts.pending} pendentes</span></span>
+                    </span>
+                  </AccordionTrigger>
+                  <AccordionContent className="pb-0 [&_p:not(:last-child)]:mb-0">
+                    <div className="flex flex-col gap-3 border-t border-border bg-muted/25 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5"><span className="text-xs text-muted-foreground">{item.invitation.responsiblePhone || 'WhatsApp não informado'}</span><Button type="button" size="sm" variant="outline" onClick={() => onShare(item.invitation)}><WhatsappLogo weight="fill" /> Enviar para a família</Button></div>
+                    <GuestResponseTable item={item} groupName={groupName} onEdit={onEdit} onRsvp={onRsvp} />
+                    <InvitationFooter invitation={item.invitation} />
+                  </AccordionContent>
+                </AccordionItem>
               );
-            })
+            })}
+          </Accordion>
         ) : (
           <div className="rounded-2xl border border-border bg-card p-5"><EmptyState icon={UserPlus} title="Nenhum convidado encontrado" description="Adicione pessoas à lista do casal e, quando fizer sentido, informe a família." action="Adicionar convidado" onAction={onAdd} /></div>
         )}
