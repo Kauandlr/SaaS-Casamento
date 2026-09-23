@@ -17,6 +17,13 @@ export function invitationRsvpStatus(responses: string[], confirmedCompanions = 
   return responses.some((response) => response === 'confirmado') || confirmedCompanions > 0 ? 'confirmado' : 'recusado';
 }
 
+export function rsvpResponseCounts(responses: string[], confirmedCompanions = 0) {
+  const confirmed = responses.filter((response) => response === 'confirmado').length + confirmedCompanions;
+  const declined = responses.filter((response) => response === 'não irá').length;
+  const pending = responses.length - responses.filter(isAnsweredRsvp).length;
+  return { confirmed, declined, pending };
+}
+
 export function confirmedAgeTotals(people: Array<{ ageGroup: string; rsvp?: string }>) {
   return people.reduce((totals, person) => {
     if (person.rsvp && person.rsvp !== 'confirmado') return totals;

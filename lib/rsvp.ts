@@ -12,6 +12,7 @@ export {
   isAnsweredRsvp,
   isRsvpDeadlineOpen,
   normalizeRsvpName,
+  rsvpResponseCounts,
   saoPauloDate,
 } from './rsvp-rules';
 export type { InvitationRsvpStatus, RsvpAnswer } from './rsvp-rules';

@@ -73,7 +73,7 @@ import type { Guest, GuestInvitation, WeddingSnapshot } from '@/lib/wedding-type
 import { LunaPanel } from '@/components/luna-panel';
 import { PaletteView } from '@/components/palette-view';
 import { WhatsAppShareDialog } from '@/components/whatsapp-share-dialog';
-import { confirmedAgeTotals, invitationRsvpStatus, type InvitationRsvpStatus } from '@/lib/rsvp-rules';
+import { confirmedAgeTotals, invitationRsvpStatus, rsvpResponseCounts, type InvitationRsvpStatus } from '@/lib/rsvp-rules';
 
 type View =
   | 'overview'
@@ -1336,7 +1336,7 @@ function Guests({
   onShareSite: () => void;
 }) {
   const [roleFilter, setRoleFilter] = useState<GuestRoleFilter>('all');
-  const [rsvpFilter, setRsvpFilter] = useState<'all' | InvitationRsvpStatus>('all');
+  const [rsvpFilter, setRsvpFilter] = useState<'all' | Exclude<InvitationRsvpStatus, 'parcial'>>('all');
   const normalizedSearch = search.toLocaleLowerCase('pt-BR');
   const allItems = data.guestInvitations.map((invitation) => {
     const members = data.guests.filter((guest) => invitation.guestIds.includes(guest.id));
@@ -1354,12 +1354,16 @@ function Guests({
     });
     return { invitation, members, visibleMembers, status };
   }).filter(({ visibleMembers, status }) =>
-    visibleMembers.length > 0 && (rsvpFilter === 'all' || status === rsvpFilter),
+    visibleMembers.length > 0 && (
+      rsvpFilter === 'all'
+      || status === rsvpFilter
+      || (rsvpFilter === 'pendente' && status === 'parcial')
+    ),
   );
-  const confirmed = data.guests.filter((item) => item.rsvp === 'confirmado').length
-    + data.guestInvitations.reduce((sum, invitation) => sum + invitation.companions.length, 0);
-  const declined = data.guests.filter((item) => item.rsvp === 'não irá').length;
-  const pendingResponses = data.guests.length - data.guests.filter((item) => ['confirmado', 'não irá'].includes(item.rsvp)).length;
+  const { confirmed, declined, pending: pendingResponses } = rsvpResponseCounts(
+    data.guests.map((guest) => guest.rsvp),
+    data.guestInvitations.reduce((sum, invitation) => sum + invitation.companions.length, 0),
+  );
   const ages = confirmedAgeTotals([
     ...data.guests.map((guest) => ({ ageGroup: guest.ageGroup, rsvp: guest.rsvp })),
     ...data.guestInvitations.flatMap((invitation) => invitation.companions.map((companion) => ({ ageGroup: companion.ageGroup, rsvp: 'confirmado' }))),
@@ -1391,7 +1395,7 @@ function Guests({
     <>
       <PageHeading
         title="Convidados"
-        subtitle={`${confirmed} confirmados · ${declined} recusados · ${pendingResponses} pendentes.`}
+        subtitle={`${confirmed} confirmados · ${declined} não irão · ${pendingResponses} pendentes.`}
         icon={UsersThree}
         action="Novo convidado"
         onAction={onAdd}
@@ -1438,27 +1442,25 @@ function Guests({
         ))}
       </div>
       <div className="mb-4 grid grid-cols-2 divide-x divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card lg:grid-cols-4 lg:divide-y-0">
-        {[['Confirmados', confirmed], ['Recusados', declined], ['Adultos confirmados', ages.adults], ['Crianças confirmadas', ages.children]].map(([label, value]) => <div key={String(label)} className="p-4"><p className="font-mono text-2xl font-semibold">{value}</p><p className="mt-1 text-xs text-muted-foreground">{label}</p></div>)}
+        {[['Confirmados', confirmed], ['Não irão', declined], ['Adultos confirmados', ages.adults], ['Crianças confirmadas', ages.children]].map(([label, value]) => <div key={String(label)} className="p-4"><p className="font-mono text-2xl font-semibold">{value}</p><p className="mt-1 text-xs text-muted-foreground">{label}</p></div>)}
       </div>
       <label className="mb-4 grid max-w-xs gap-2 text-sm font-medium">Situação do convite
         <NativeSelect value={rsvpFilter} onValueChange={(value) => setRsvpFilter((value ?? 'all') as typeof rsvpFilter)}>
           <NativeSelectOption value="all">Todas</NativeSelectOption>
           <NativeSelectOption value="pendente">Pendente</NativeSelectOption>
-          <NativeSelectOption value="parcial">Parcial</NativeSelectOption>
           <NativeSelectOption value="confirmado">Confirmado</NativeSelectOption>
-          <NativeSelectOption value="recusado">Recusado</NativeSelectOption>
+          <NativeSelectOption value="recusado">Não irá</NativeSelectOption>
         </NativeSelect>
       </label>
       <section aria-label="Lista de convidados" className="space-y-3">
         {items.length ? (
           items.map(({ invitation, members, visibleMembers, status }) => {
-              const confirmedCount = members.filter((member) => member.rsvp === 'confirmado').length;
-              const declinedCount = members.filter((member) => member.rsvp === 'não irá').length;
-              const statusLabel = { pendente: 'Pendente', parcial: 'Parcial', confirmado: 'Confirmado', recusado: 'Recusado' }[status];
+              const counts = rsvpResponseCounts(members.map((member) => member.rsvp), invitation.companions.length);
+              const statusLabel = { pendente: 'Pendente', parcial: 'Pendente', confirmado: 'Confirmado', recusado: 'Não irá' }[status];
               const statusTone = status === 'confirmado'
                 ? 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200'
                 : status === 'recusado'
-                  ? 'bg-rose-100 text-rose-900 dark:bg-rose-950 dark:text-rose-200'
+                  ? 'bg-muted text-foreground'
                   : status === 'parcial'
                     ? 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200'
                     : 'bg-muted text-muted-foreground';
@@ -1478,7 +1480,7 @@ function Guests({
                       </div>
                         <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
                           <span>{members.length} {members.length === 1 ? 'pessoa' : 'pessoas'}</span>
-                        <span>{confirmedCount + invitation.companions.length} confirmados · {declinedCount} não irão</span>
+                        <span>{counts.confirmed} confirmados · {counts.declined} não irá · {counts.pending} pendentes</span>
                         <span>{invitation.responsiblePhone || 'WhatsApp não informado'}</span>
                       </div>
                     </div>

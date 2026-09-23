@@ -5,6 +5,7 @@ import {
   invitationRsvpStatus,
   isRsvpDeadlineOpen,
   normalizeRsvpName,
+  rsvpResponseCounts,
 } from '@/lib/rsvp-rules';
 
 void test('normalizes invitation names without exposing fuzzy matches', () => {
@@ -19,6 +20,17 @@ void test('derives all invitation RSVP states from individual answers', () => {
   assert.equal(invitationRsvpStatus(['confirmado', 'não irá']), 'confirmado');
   assert.equal(invitationRsvpStatus(['não irá', 'não irá']), 'recusado');
   assert.equal(invitationRsvpStatus(['não irá'], 1), 'confirmado');
+});
+
+void test('counts confirmed, declined and pending people independently', () => {
+  assert.deepEqual(
+    rsvpResponseCounts(['confirmado', 'confirmado', 'não irá', 'pendente'], 1),
+    { confirmed: 3, declined: 1, pending: 1 },
+  );
+  assert.deepEqual(
+    rsvpResponseCounts(['não irá', 'não irá']),
+    { confirmed: 0, declined: 2, pending: 0 },
+  );
 });
 
 void test('counts adolescents as adults and babies as children', () => {
