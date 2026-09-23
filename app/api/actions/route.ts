@@ -227,7 +227,7 @@ export async function executeWeddingAction(
               entityId,
               weddingId,
               payload.fullName,
-              payload.side,
+              'Ambos',
               payload.groupName,
               payload.groupType,
               payload.role,
@@ -259,7 +259,7 @@ export async function executeWeddingAction(
             "role" = ?, age_group = ?, rsvp = ?, link_url = ? WHERE id = ? AND wedding_id = ?`)
           .bind(
             payload.fullName,
-            payload.side,
+            'Ambos',
             payload.groupName,
             payload.groupType,
             payload.role,

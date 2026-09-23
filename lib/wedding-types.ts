@@ -36,7 +36,6 @@ export type Guest = {
   id: string;
   invitationGroupId: string | null;
   fullName: string;
-  side: string;
   groupName: string;
   groupType: string;
   role: string;

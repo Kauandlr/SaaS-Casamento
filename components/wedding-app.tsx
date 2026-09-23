@@ -5,7 +5,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Bell,
   CalendarDots,
-  CaretDown,
   CaretRight,
   Check,
   CheckCircle,
@@ -32,6 +31,7 @@ import {
   Sun,
   TrendUp,
   UserPlus,
+  UsersFour,
   UsersThree,
   Wallet,
   WarningCircle,
@@ -40,12 +40,6 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { CoupleAccess } from '@/components/couple-access';
 import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import {
   Dialog,
   DialogContent,
@@ -584,6 +578,7 @@ export function WeddingApp({
                   submit('set_guest_rsvp', { id, rsvp }, 'Confirmação de presença atualizada')
                 }
                 onShare={setSharingInvitation}
+                onShareSite={() => setGeneralShareOpen(true)}
               />
             )}
             {view === 'checklist' && (
@@ -1330,6 +1325,7 @@ function Guests({
   onEdit,
   onRsvp,
   onShare,
+  onShareSite,
 }: {
   data: WeddingSnapshot;
   search: string;
@@ -1337,6 +1333,7 @@ function Guests({
   onEdit: (guest: Guest) => void;
   onRsvp: (id: string, rsvp: string) => void;
   onShare: (invitation: GuestInvitation) => void;
+  onShareSite: () => void;
 }) {
   const [roleFilter, setRoleFilter] = useState<GuestRoleFilter>('all');
   const [rsvpFilter, setRsvpFilter] = useState<'all' | InvitationRsvpStatus>('all');
@@ -1345,15 +1342,20 @@ function Guests({
     const members = data.guests.filter((guest) => invitation.guestIds.includes(guest.id));
     return { invitation, members, status: invitationRsvpStatus(members.map((member) => member.rsvp), invitation.companions.length) };
   });
-  const items = allItems.filter(({ invitation, members, status }) => {
-    const matchesSearch =
-      `${invitation.name} ${invitation.responsiblePhone} ${members.map((member) => member.fullName).join(' ')}`
-        .toLocaleLowerCase('pt-BR')
-        .includes(normalizedSearch);
-    const matchesRole = roleFilter === 'all'
-      || members.some((member) => member.role === roleFilter);
-    return matchesSearch && matchesRole && (rsvpFilter === 'all' || status === rsvpFilter);
-  });
+  const items = allItems.map(({ invitation, members, status }) => {
+    const groupMatchesSearch = `${invitation.name} ${invitation.responsiblePhone} ${members[0]?.groupName ?? ''}`
+      .toLocaleLowerCase('pt-BR')
+      .includes(normalizedSearch);
+    const visibleMembers = members.filter((member) => {
+      const matchesRole = roleFilter === 'all' || member.role === roleFilter;
+      const matchesSearch = groupMatchesSearch
+        || member.fullName.toLocaleLowerCase('pt-BR').includes(normalizedSearch);
+      return matchesRole && matchesSearch;
+    });
+    return { invitation, members, visibleMembers, status };
+  }).filter(({ visibleMembers, status }) =>
+    visibleMembers.length > 0 && (rsvpFilter === 'all' || status === rsvpFilter),
+  );
   const confirmed = data.guests.filter((item) => item.rsvp === 'confirmado').length
     + data.guestInvitations.reduce((sum, invitation) => sum + invitation.companions.length, 0);
   const declined = data.guests.filter((item) => item.rsvp === 'não irá').length;
@@ -1362,6 +1364,7 @@ function Guests({
     ...data.guests.map((guest) => ({ ageGroup: guest.ageGroup, rsvp: guest.rsvp })),
     ...data.guestInvitations.flatMap((invitation) => invitation.companions.map((companion) => ({ ageGroup: companion.ageGroup, rsvp: 'confirmado' }))),
   ]);
+  const publicPath = `/casamento/${data.wedding.publicSlug}`;
   const roleMetrics: Array<{
     value: GuestRoleFilter;
     label: string;
@@ -1393,6 +1396,32 @@ function Guests({
         action="Novo convidado"
         onAction={onAdd}
       />
+      <section className="mb-4 overflow-hidden rounded-2xl border border-border bg-card">
+        <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-secondary text-secondary-foreground">
+              <LinkSimple size={19} />
+            </span>
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold">Link do casamento</h2>
+              <p className="mt-1 text-sm leading-5 text-muted-foreground">
+                Envie o site geral ou use os convites direcionados na lista abaixo.
+              </p>
+              <a
+                className="mt-2 block truncate font-mono text-xs text-primary hover:underline"
+                href={publicPath}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {publicPath}
+              </a>
+            </div>
+          </div>
+          <Button type="button" className="h-9 shrink-0" onClick={onShareSite}>
+            <WhatsappLogo weight="fill" /> Enviar link
+          </Button>
+        </div>
+      </section>
       <div
         className="mb-4 grid grid-cols-2 gap-3 md:shrink-0 lg:grid-cols-4"
         role="group"
@@ -1420,10 +1449,9 @@ function Guests({
           <NativeSelectOption value="recusado">Recusado</NativeSelectOption>
         </NativeSelect>
       </label>
-      <section className="overflow-hidden rounded-2xl border border-border bg-card">
+      <section aria-label="Lista de convidados" className="space-y-3">
         {items.length ? (
-          <div className="divide-y divide-border">
-            {items.map(({ invitation, members, status }) => {
+          items.map(({ invitation, members, visibleMembers, status }) => {
               const confirmedCount = members.filter((member) => member.rsvp === 'confirmado').length;
               const declinedCount = members.filter((member) => member.rsvp === 'não irá').length;
               const statusLabel = { pendente: 'Pendente', parcial: 'Parcial', confirmado: 'Confirmado', recusado: 'Recusado' }[status];
@@ -1434,72 +1462,96 @@ function Guests({
                   : status === 'parcial'
                     ? 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200'
                     : 'bg-muted text-muted-foreground';
+              const familyName = members.find((member) => member.groupType !== 'individual')?.groupName.trim();
+              const groupName = familyName || (members.length > 1 ? invitation.name : 'Sem família');
               return (
-                <article key={invitation.id} className="p-4 sm:p-5">
-                  <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
-                    <div className="min-w-0 flex-1">
+                <article key={invitation.id} className="overflow-hidden rounded-2xl border border-border bg-card">
+                  <header className="flex flex-col gap-3 border-b border-border bg-muted/35 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-secondary text-secondary-foreground">
+                        <UsersFour size={18} />
+                      </span>
+                      <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="font-semibold">{invitation.name}</h3>
+                          <h3 className="truncate text-sm font-semibold">{groupName}</h3>
                         <Badge className={statusTone}>{statusLabel}</Badge>
                       </div>
-                      <p className="mt-1 max-w-[85ch] text-pretty text-sm leading-6 text-muted-foreground">{members.map((member) => member.fullName).join(', ')}</p>
-                      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                        <span>{members.length} {members.length === 1 ? 'pessoa' : 'pessoas'}</span>
+                        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                          <span>{members.length} {members.length === 1 ? 'pessoa' : 'pessoas'}</span>
                         <span>{confirmedCount + invitation.companions.length} confirmados · {declinedCount} não irão</span>
                         <span>{invitation.responsiblePhone || 'WhatsApp não informado'}</span>
-                        <span>{invitation.lastResponseAt ? `Respondido em ${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(invitation.lastResponseAt))}` : 'Ainda sem resposta'}</span>
                       </div>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-                      <Button type="button" variant="outline" className="grow sm:grow-0" onClick={() => onShare(invitation)}>
-                        <WhatsappLogo size={17} weight="fill" />Enviar convite
-                      </Button>
-                      {members.length === 1 ? (
-                        <Button type="button" variant="ghost" className="grow sm:grow-0" onClick={() => onEdit(members[0])}>
-                          <PencilSimple size={17} />Editar pessoa
-                        </Button>
-                      ) : (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger render={<Button type="button" variant="ghost" className="grow sm:grow-0" />}>
-                            <PencilSimple size={17} />Editar pessoas<CaretDown size={14} />
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="max-h-72 w-64 overflow-y-auto">
-                            {members.map((member) => (
-                              <DropdownMenuItem key={member.id} onClick={() => onEdit(member)} className="py-2">
-                                <PencilSimple size={16} />
-                                <span className="truncate">{member.fullName}</span>
-                              </DropdownMenuItem>
-                            ))}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      )}
                     </div>
-                  </div>
-                  <details className="mt-4 border-t border-border pt-3">
-                    <summary className="cursor-pointer text-xs font-medium text-muted-foreground">Ajustar confirmações manualmente</summary>
-                    <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                      {members.map((member) => (
-                        <label key={member.id} className="flex items-center justify-between gap-3 text-sm">
-                          <span className="truncate">{member.fullName}</span>
-                          <NativeSelect className="w-[142px]" size="sm" value={member.rsvp} onValueChange={(value) => onRsvp(member.id, value ?? member.rsvp)}>
+                    <div className="flex items-center gap-2">
+                      <Button type="button" size="sm" variant="outline" onClick={() => onShare(invitation)}>
+                        <WhatsappLogo weight="fill" />
+                        {familyName ? 'Enviar para a família' : 'Enviar convite'}
+                      </Button>
+                    </div>
+                  </header>
+                  <div role="table" aria-label={`Convidados em ${groupName}`}>
+                    <div role="row" className="hidden grid-cols-[minmax(0,1fr)_9rem_10rem_3rem] gap-3 border-b border-border px-5 py-2 text-[11px] font-medium text-muted-foreground lg:grid">
+                      <span role="columnheader">Pessoa</span>
+                      <span role="columnheader">Papel</span>
+                      <span role="columnheader">Confirmação</span>
+                      <span role="columnheader" className="text-right">Ação</span>
+                    </div>
+                    <div className="divide-y divide-border">
+                      {visibleMembers.map((member) => {
+                        const roleLabel = member.role === 'padrinho'
+                          ? 'Padrinho'
+                          : member.role === 'madrinha'
+                            ? 'Madrinha'
+                            : 'Convidado';
+                        const ageLabel = member.ageGroup.charAt(0).toLocaleUpperCase('pt-BR') + member.ageGroup.slice(1);
+                        return (
+                        <div key={member.id} role="row" className="grid gap-3 px-4 py-3.5 transition-colors hover:bg-muted/25 sm:px-5 lg:grid-cols-[minmax(0,1fr)_9rem_10rem_3rem] lg:items-center">
+                          <div role="cell" className="min-w-0">
+                            <p className="truncate text-sm font-medium">{member.fullName}</p>
+                            <p className="mt-0.5 text-xs text-muted-foreground lg:hidden">{roleLabel} · {ageLabel}</p>
+                            <p className="mt-0.5 hidden text-xs text-muted-foreground lg:block">{ageLabel}</p>
+                          </div>
+                          <span role="cell" className="hidden text-sm lg:block">{roleLabel}</span>
+                          <div role="cell">
+                            <NativeSelect className="w-full lg:w-[148px]" size="sm" value={member.rsvp} onValueChange={(value) => onRsvp(member.id, value ?? member.rsvp)} aria-label={`Confirmação de ${member.fullName}`}>
                             {!['pendente', 'confirmado', 'não irá'].includes(member.rsvp) && <NativeSelectOption value={member.rsvp}>Pendente</NativeSelectOption>}
                             <NativeSelectOption value="pendente">Pendente</NativeSelectOption>
                             <NativeSelectOption value="confirmado">Confirmado</NativeSelectOption>
                             <NativeSelectOption value="não irá">Não irá</NativeSelectOption>
                           </NativeSelect>
-                        </label>
+                          </div>
+                          <div role="cell" className="flex justify-end">
+                            <Button type="button" variant="ghost" size="icon" aria-label={`Editar ${member.fullName}`} onClick={() => onEdit(member)}>
+                              <PencilSimple />
+                            </Button>
+                          </div>
+                        </div>
+                        );
+                      })}
+                      {invitation.companions.map((companion) => (
+                        <div key={companion.id} role="row" className="grid gap-3 px-4 py-3.5 sm:px-5 lg:grid-cols-[minmax(0,1fr)_9rem_10rem_3rem] lg:items-center">
+                          <div role="cell" className="min-w-0">
+                            <p className="truncate text-sm font-medium">{companion.name}</p>
+                            <p className="mt-0.5 text-xs text-muted-foreground">{companion.ageGroup}</p>
+                          </div>
+                          <span role="cell" className="hidden text-sm text-muted-foreground lg:block">Acompanhante</span>
+                          <div role="cell"><Badge variant="secondary">Confirmado</Badge></div>
+                          <span role="cell" />
+                        </div>
                       ))}
-                      {invitation.companions.map((companion) => <div key={companion.id} className="flex items-center justify-between gap-3 text-sm"><span className="truncate">{companion.name}</span><Badge variant="secondary">Acompanhante confirmado</Badge></div>)}
                     </div>
-                    {invitation.rsvpNote && <p className="mt-4 rounded-xl bg-secondary/60 p-3 text-sm"><span className="font-medium">Observação:</span> {invitation.rsvpNote}</p>}
+                  </div>
+                  <footer className="border-t border-border px-4 pb-4 sm:px-5">
+                    {invitation.lastResponseAt && <p className="mt-3 text-xs text-muted-foreground">Respondido em {new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(invitation.lastResponseAt))}</p>}
+                    {invitation.rsvpNote && <p className="mt-3 rounded-xl bg-secondary/60 p-3 text-sm"><span className="font-medium">Observação:</span> {invitation.rsvpNote}</p>}
                     <InvitationHistory invitationId={invitation.id} />
-                  </details>
+                  </footer>
                 </article>
               );
-            })}
-          </div>
+            })
         ) : (
-          <div className="p-5"><EmptyState icon={UserPlus} title="Nenhum convite encontrado" description="Adicione pessoas e organize-as em convites para compartilhar." action="Adicionar convidado" onAction={onAdd} /></div>
+          <div className="rounded-2xl border border-border bg-card p-5"><EmptyState icon={UserPlus} title="Nenhum convidado encontrado" description="Adicione pessoas à lista do casal e, quando fizer sentido, informe a família." action="Adicionar convidado" onAction={onAdd} /></div>
         )}
       </section>
     </>
@@ -1775,11 +1827,11 @@ function AddDialog({
   const titles = {
     finance: ['Novo pagamento', 'Registre um vencimento real.'],
     vendors: ['Novo fornecedor', 'Adicione uma proposta para comparar.'],
-    guests: ['Novo convidado', 'Inclua a pessoa e o status do convite.'],
+    guests: ['Novo convidado', 'Inclua uma pessoa na lista do casal.'],
     checklist: ['Nova tarefa', 'Defina responsabilidade, prioridade e prazo.'],
   } as const;
   const [title, description] = editingGuest && kind === 'guests'
-    ? ['Editar convidado', 'Atualize os dados e a relação com os demais convidados.']
+    ? ['Editar convidado', 'Atualize os dados da pessoa e sua família.']
     : titles[kind as keyof typeof titles];
   const baseInput = 'h-10';
   const label = 'grid gap-2 text-sm font-medium';
@@ -1821,7 +1873,6 @@ function AddDialog({
         {
           ...(editingGuest ? { id: editingGuest.id } : {}),
           fullName: form.get('fullName'),
-          side: form.get('side'),
           groupName: form.get('groupName'),
           groupType: form.get('groupType'),
           role: form.get('role'),
@@ -2026,7 +2077,7 @@ function AddDialog({
                   </NativeSelect>
                 </label>
                 <label className={label}>
-                  Vínculo
+                  Tipo de convite
                   <NativeSelect name="groupType" className="w-full" value={groupType} onValueChange={(value) => setGroupType(value ?? 'individual')}>
                     <NativeSelectOption value="individual">Individual</NativeSelectOption>
                     <NativeSelectOption value="casal">Casal</NativeSelectOption>
@@ -2036,40 +2087,27 @@ function AddDialog({
                 </label>
               </div>
               <label className={label}>
-                Nome do casal, família ou grupo
+                Família ou grupo
                 <Input
                   name="groupName"
                   required={groupType !== 'individual'}
                   defaultValue={editingGuest?.groupName}
-                  placeholder="Use o mesmo nome para pessoas do mesmo grupo"
+                  placeholder={groupType === 'individual' ? 'Opcional' : 'Ex.: Família Ribeiro'}
                   className={baseInput}
                 />
+                <span className="text-xs font-normal text-muted-foreground">
+                  Pessoas com o mesmo nome ficam juntas na lista e recebem o mesmo convite.
+                </span>
               </label>
-              <div className="grid grid-cols-2 gap-3">
-                <label className={label}>
-                  Convidado de
-                  <NativeSelect name="side" className="w-full" defaultValue={editingGuest?.side ?? 'Pessoa 1'}>
-                    <NativeSelectOption value="Pessoa 1">Homem</NativeSelectOption>
-                    <NativeSelectOption value="Pessoa 2">Mulher</NativeSelectOption>
-                    <NativeSelectOption value="Ambos">Ambos</NativeSelectOption>
-                  </NativeSelect>
-                </label>
-                <label className={label}>
-                  Faixa etária
-                  <NativeSelect name="ageGroup" className="w-full" defaultValue={editingGuest?.ageGroup ?? 'adulto'}>
-                    <NativeSelectOption value="adulto">
-                      Adulto
-                    </NativeSelectOption>
-                    <NativeSelectOption value="adolescente">
-                      Adolescente
-                    </NativeSelectOption>
-                    <NativeSelectOption value="criança">
-                      Criança
-                    </NativeSelectOption>
-                    <NativeSelectOption value="bebê">Bebê</NativeSelectOption>
-                  </NativeSelect>
-                </label>
-              </div>
+              <label className={label}>
+                Faixa etária
+                <NativeSelect name="ageGroup" className="w-full" defaultValue={editingGuest?.ageGroup ?? 'adulto'}>
+                  <NativeSelectOption value="adulto">Adulto</NativeSelectOption>
+                  <NativeSelectOption value="adolescente">Adolescente</NativeSelectOption>
+                  <NativeSelectOption value="criança">Criança</NativeSelectOption>
+                  <NativeSelectOption value="bebê">Bebê</NativeSelectOption>
+                </NativeSelect>
+              </label>
               <label className={label}>
                 Confirmação de presença
                 <NativeSelect name="rsvp" className="w-full" defaultValue={editingGuest?.rsvp ?? 'ainda não convidado'}>

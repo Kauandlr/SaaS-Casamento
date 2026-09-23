@@ -1,4 +1,5 @@
 import { getDb } from '@/db';
+import { dateOnly } from './date-value';
 import type { GuestInvitation, InvitationKind } from './wedding-types';
 
 type Row = Record<string, unknown>;
@@ -137,7 +138,7 @@ export async function getPublicWedding(slug: string) {
     title: String(wedding.title),
     personOne: String(wedding.person_one),
     personTwo: String(wedding.person_two),
-    weddingDate: String(wedding.wedding_date),
+    weddingDate: dateOnly(wedding.wedding_date),
     city: String(wedding.city),
   };
 }

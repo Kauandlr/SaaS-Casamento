@@ -72,9 +72,8 @@ void test('guest tool exposes the required choices instead of an open payload', 
     required: string[];
   };
   assert.ok(payload.required.includes('fullName'));
-  assert.ok(payload.required.includes('side'));
   assert.ok(payload.required.includes('ageGroup'));
-  assert.deepEqual(payload.properties.side.enum, ['Pessoa 1', 'Pessoa 2', 'Ambos']);
+  assert.equal(payload.properties.side, undefined);
   assert.deepEqual(payload.properties.ageGroup.enum, ['adulto', 'adolescente', 'criança', 'bebê']);
 });
 
@@ -103,7 +102,6 @@ void test('rejects an incomplete guest proposal and explains what must be confir
   } catch (error) {
     assert.ok(error instanceof z.ZodError);
     const message = explainActionValidationError(error);
-    assert.match(message, /de quem é convidado/);
     assert.match(message, /faixa etária/);
   }
 });
@@ -113,10 +111,9 @@ void test('fills only safe defaults after essential guest data is provided', () 
     'propose_add_guest',
     JSON.stringify({
       title: 'Adicionar convidado',
-      summary: 'Cadastrar Vinicius Luiz da Silva como adulto e do lado de ambos.',
+      summary: 'Cadastrar Vinicius Luiz da Silva como adulto.',
       payload: {
         fullName: 'Vinicius Luiz da Silva',
-        side: 'Ambos',
         ageGroup: 'adulto',
       },
     }),
@@ -124,7 +121,6 @@ void test('fills only safe defaults after essential guest data is provided', () 
 
   assert.deepEqual(proposal?.payload, {
     fullName: 'Vinicius Luiz da Silva',
-    side: 'Ambos',
     groupName: '',
     groupType: 'individual',
     role: 'convidado',
@@ -137,7 +133,6 @@ void test('fills only safe defaults after essential guest data is provided', () 
 void test('guest relationships require a shared group name and can be edited', () => {
   const guest = {
     fullName: 'Ana Ribeiro',
-    side: 'Ambos',
     ageGroup: 'criança',
     groupType: 'família',
     groupName: 'Família Ribeiro',

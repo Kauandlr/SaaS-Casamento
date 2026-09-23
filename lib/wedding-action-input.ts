@@ -35,7 +35,6 @@ export const vendorSchema = z.object({
 
 export const guestSchema = z.object({
   fullName: z.string().trim().min(2).max(120).describe('Nome completo do convidado.'),
-  side: z.enum(['Pessoa 1', 'Pessoa 2', 'Ambos']).describe('De quem é convidado: Pessoa 1 corresponde ao homem, Pessoa 2 à mulher e Ambos ao casal; pergunte se não estiver claro.'),
   groupName: z.string().trim().max(100).default('').describe('Família ou grupo; use string vazia quando ausente.'),
   groupType: z.enum(['individual', 'casal', 'família', 'outro']).default('individual'),
   role: z.enum(['convidado', 'padrinho', 'madrinha']).default('convidado'),
@@ -198,7 +197,6 @@ export function parseWeddingActionPayload(action: WeddingActionName, payload: un
 const fieldLabels: Record<string, string> = {
   fullName: 'nome completo',
   groupName: 'nome do casal, família ou grupo',
-  side: 'de quem é convidado (homem, mulher ou ambos)',
   ageGroup: 'faixa etária (adulto, adolescente, criança ou bebê)',
   rsvp: 'confirmação de presença (ainda não convidado, aguardando, confirmado, não irá ou talvez)',
   title: 'título',

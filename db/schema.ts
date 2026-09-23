@@ -277,7 +277,7 @@ export const guests = pgTable(
       onDelete: 'set null',
     }),
     fullName: text('full_name').notNull(),
-    side: text('side').notNull(),
+    side: text('side').notNull().default('Ambos'),
     groupName: text('group_name').notNull().default(''),
     groupType: text('group_type').notNull().default('individual'),
     role: text('role').notNull().default('convidado'),
@@ -291,6 +291,7 @@ export const guests = pgTable(
     index('idx_guests_wedding_rsvp').on(table.weddingId, table.rsvp),
     index('idx_guests_wedding_group').on(table.weddingId, table.groupName),
     index('idx_guests_invitation_group').on(table.invitationGroupId),
+    check('guests_side_couple_check', sql`${table.side} = 'Ambos'`),
   ],
 );
 
